@@ -1,0 +1,34 @@
+[project]
+name = "opc-agent-platform"
+version = "0.1.0"
+description = "A minimal OPC matching platform using the official A2A protocol."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "a2a-sdk[http-server]==1.1.0",
+  "fastapi>=0.115.2,<1",
+  "httpx>=0.28.1,<1",
+  "python-dotenv>=1.1,<2",
+  "uvicorn>=0.35.0,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+  "pytest-asyncio>=0.25,<2",
+]
+
+[project.scripts]
+opc-agent-platform = "opc_agent_platform.app:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opc_agent_platform"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["tests"]

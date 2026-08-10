@@ -1,0 +1,29 @@
+# Local operating-system files
+.DS_Store
+
+# Secrets and local settings
+.env
+**/.env
+*.pem
+*.key
+
+# Python environments and test output
+.venv/
+**/.venv/
+.pytest_cache/
+**/.pytest_cache/
+__pycache__/
+**/__pycache__/
+
+# JavaScript dependencies and test output
+node_modules/
+**/node_modules/
+test-results/
+**/test-results/
+opc-link-prototype/screenshots/
+
+# Reference clones and local conversation notes are not part of this product repo.
+/A2A/
+/a2a-python/
+/a2a-samples/
+/对话留档.txt

@@ -1,0 +1,325 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+
+from a2a.client import ClientConfig, create_client
+from a2a.helpers import (
+    get_artifact_text,
+    get_data_parts,
+    get_message_text,
+    new_data_message,
+)
+from a2a.types import Role, SendMessageRequest, TaskState
+
+from .deepseek import DeepSeekClient
+from .matching import analyze_pair
+from .models import (
+    MatchReport,
+    ModelUsage,
+    ScreeningRecord,
+    ScreeningState,
+    TranscriptTurn,
+)
+from .profiles import get_profile
+from .store import ScreeningStore
+
+
+class A2AProtocolError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class A2ATextEvent:
+    kind: str
+    task_id: str
+    text: str = ""
+    task_state: str = ""
+
+
+class A2ACommunicator:
+    def __init__(
+        self,
+        base_url: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.transport = transport
+
+    async def send(
+        self,
+        target_agent_id: str,
+        payload: dict[str, Any],
+    ) -> tuple[str, str, dict[str, Any]]:
+        target_url = f"{self.base_url}/a2a/{target_agent_id}"
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=60.0,
+            follow_redirects=True,
+        ) as http_client:
+            client = await create_client(
+                agent=target_url,
+                client_config=ClientConfig(
+                    streaming=False,
+                    httpx_client=http_client,
+                    accepted_output_modes=["application/json"],
+                ),
+            )
+            events = [
+                event
+                async for event in client.send_message(
+                    SendMessageRequest(
+                        message=new_data_message(
+                            payload,
+                            media_type="application/json",
+                            role=Role.ROLE_USER,
+                        )
+                    )
+                )
+            ]
+
+        if len(events) != 1 or not events[0].HasField("task"):
+            raise A2AProtocolError("Agent did not return a completed Task")
+        task = events[0].task
+        state_name = TaskState.Name(task.status.state)
+        if task.status.state != TaskState.TASK_STATE_COMPLETED:
+            detail = (
+                get_message_text(task.status.message)
+                if task.status.HasField("message")
+                else "no error detail"
+            )
+            raise A2AProtocolError(f"Agent Task ended in {state_name}: {detail}")
+        if len(task.artifacts) != 1:
+            raise A2AProtocolError("Agent Task must contain one result Artifact")
+        data_parts = get_data_parts(task.artifacts[0].parts)
+        if len(data_parts) != 1 or not isinstance(data_parts[0], dict):
+            raise A2AProtocolError("Agent result Artifact is not structured JSON")
+        return task.id, state_name, data_parts[0]
+
+    async def stream_text(
+        self,
+        target_agent_id: str,
+        payload: dict[str, Any],
+    ) -> AsyncIterator[A2ATextEvent]:
+        target_url = f"{self.base_url}/a2a/{target_agent_id}"
+        task_id = ""
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=60.0,
+            follow_redirects=True,
+        ) as http_client:
+            client = await create_client(
+                agent=target_url,
+                client_config=ClientConfig(
+                    streaming=True,
+                    httpx_client=http_client,
+                    accepted_output_modes=["text/plain"],
+                ),
+            )
+            async for event in client.send_message(
+                SendMessageRequest(
+                    message=new_data_message(
+                        payload,
+                        media_type="application/json",
+                        role=Role.ROLE_USER,
+                    )
+                )
+            ):
+                if event.HasField("task"):
+                    task_id = event.task.id
+                    continue
+                if event.HasField("artifact_update"):
+                    task_id = event.artifact_update.task_id or task_id
+                    text = get_artifact_text(event.artifact_update.artifact)
+                    if text:
+                        yield A2ATextEvent("delta", task_id, text=text)
+                    continue
+                if event.HasField("status_update"):
+                    task_id = event.status_update.task_id or task_id
+                    state = event.status_update.status.state
+                    state_name = TaskState.Name(state)
+                    if state == TaskState.TASK_STATE_COMPLETED:
+                        yield A2ATextEvent(
+                            "completed",
+                            task_id,
+                            task_state=state_name,
+                        )
+                    elif state in {
+                        TaskState.TASK_STATE_FAILED,
+                        TaskState.TASK_STATE_REJECTED,
+                        TaskState.TASK_STATE_CANCELED,
+                    }:
+                        detail = (
+                            get_message_text(event.status_update.status.message)
+                            if event.status_update.status.HasField("message")
+                            else "no error detail"
+                        )
+                        raise A2AProtocolError(
+                            f"Streaming Agent Task ended in {state_name}: {detail}"
+                        )
+
+
+class ScreeningService:
+    def __init__(
+        self,
+        store: ScreeningStore,
+        communicator: A2ACommunicator,
+        deepseek_client: DeepSeekClient | None = None,
+    ) -> None:
+        self.store = store
+        self.communicator = communicator
+        self.deepseek_client = deepseek_client
+
+    async def start(
+        self,
+        from_agent_id: str,
+        to_agent_id: str,
+    ) -> ScreeningRecord:
+        source = get_profile(from_agent_id)
+        target = get_profile(to_agent_id)
+        if source.id == target.id:
+            raise ValueError("An Agent cannot screen itself")
+
+        record = await self.store.create(source.id, target.id)
+        await self.store.set_state(record.id, ScreeningState.SCREENING)
+        try:
+            first_request = self._request(
+                record.id,
+                1,
+                source.id,
+                target.id,
+                "introduce_opc",
+                source.a2a_packet(),
+            )
+            first_response = await self._exchange(record.id, first_request)
+
+            second_request = self._request(
+                record.id,
+                2,
+                target.id,
+                source.id,
+                "answer_screening",
+                target.a2a_packet(),
+                first_response,
+            )
+            second_response = await self._exchange(record.id, second_request)
+
+            third_request = self._request(
+                record.id,
+                3,
+                source.id,
+                target.id,
+                "propose_introduction",
+                source.a2a_packet(),
+                second_response,
+            )
+            await self._exchange(record.id, third_request)
+
+            completed = await self.store.get(record.id)
+            baseline = analyze_pair(source, target)
+            if self.deepseek_client:
+                decision, synthesis_usage = (
+                    await self.deepseek_client.synthesize_report(
+                        source=source,
+                        target=target,
+                        transcript=completed.transcript,
+                        baseline=baseline,
+                    )
+                )
+                total_usage = self._total_usage(completed, synthesis_usage)
+                report = MatchReport(
+                    recommendation=decision.recommendation,
+                    confidence=decision.confidence,
+                    score=decision.score,
+                    summary=decision.summary,
+                    common_ground=decision.common_ground,
+                    complementarity=decision.complementarity,
+                    risks=decision.risks,
+                    unconfirmed=decision.unconfirmed,
+                    generated_by="deepseek",
+                    model=self.deepseek_client.model,
+                    token_usage=total_usage,
+                )
+            else:
+                report = baseline
+            report.evidence_task_ids = [turn.task_id for turn in completed.transcript]
+            await self.store.set_report(record.id, report)
+            await self.store.set_state(record.id, ScreeningState.REPORT_GENERATED)
+            return await self.store.set_state(
+                record.id, ScreeningState.WAITING_OWNER_APPROVAL
+            )
+        except Exception as exc:
+            await self.store.set_state(
+                record.id,
+                ScreeningState.FAILED,
+                error=str(exc),
+            )
+            raise
+
+    async def _exchange(
+        self,
+        screening_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        await self.store.set_state(
+            screening_id, ScreeningState.WAITING_REMOTE_AGENT
+        )
+        task_id, task_state, response = await self.communicator.send(
+            str(request["recipientAgentId"]), request
+        )
+        await self.store.add_turn(
+            screening_id,
+            TranscriptTurn(
+                round=int(request["round"]),
+                from_agent_id=str(request["senderAgentId"]),
+                to_agent_id=str(request["recipientAgentId"]),
+                task_id=task_id,
+                task_state=task_state,
+                request=request,
+                response=response,
+            ),
+        )
+        await self.store.set_state(screening_id, ScreeningState.SCREENING)
+        return response
+
+    @staticmethod
+    def _total_usage(
+        screening: ScreeningRecord,
+        synthesis_usage: ModelUsage,
+    ) -> ModelUsage:
+        usage = synthesis_usage.model_copy()
+        for turn in screening.transcript:
+            raw = turn.response.get("decisionEngine", {}).get("usage", {})
+            usage.prompt_tokens += int(raw.get("promptTokens", 0))
+            usage.completion_tokens += int(raw.get("completionTokens", 0))
+            usage.reasoning_tokens += int(raw.get("reasoningTokens", 0))
+            usage.total_tokens += int(raw.get("totalTokens", 0))
+            usage.calls += int(raw.get("calls", 0))
+        return usage
+
+    @staticmethod
+    def _request(
+        conversation_id: str,
+        round_number: int,
+        sender_id: str,
+        recipient_id: str,
+        intent: str,
+        disclosed_profile: dict[str, Any],
+        previous_response: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "protocol": "opc.screening.v1",
+            "conversationId": conversation_id,
+            "round": round_number,
+            "senderAgentId": sender_id,
+            "recipientAgentId": recipient_id,
+            "intent": intent,
+            "disclosedProfile": disclosed_profile,
+            "humanConfirmationRequired": True,
+        }
+        if previous_response is not None:
+            payload["previousResponse"] = previous_response
+        return payload
