@@ -419,6 +419,19 @@
     @keyframes internet-hop { from { transform: translateX(0); opacity: .35; } 70% { opacity: 1; } to { transform: translateX(39px); opacity: 0; } }
     .internet-form { padding: 22px 0; border-bottom: 1px solid var(--line); }
     .internet-form label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 650; }
+    .internet-target-select {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      margin: 0 0 17px;
+      padding: 0 34px 0 12px;
+      border: 1px solid #cfd0ca;
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--ink);
+      font: 600 13px/1.2 inherit;
+    }
+    .internet-target-meta { margin: -8px 0 16px; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
     .internet-form textarea {
       display: block;
       width: 100%;
@@ -751,7 +764,7 @@
           </header>
           <div class="scroll">
             <nav class="internet-mode" aria-label="公网 A2A 模式">
-              <button class="active" id="internetSingleMode" type="button">第三方任务</button>
+              <button class="active" id="internetSingleMode" type="button">单次 A2A</button>
               <button id="internetChatMode" type="button">双 Agent 调试</button>
             </nav>
             <div id="internetSinglePanel">
@@ -763,16 +776,21 @@
               </div>
               <div class="internet-hop" aria-hidden="true"></div>
               <div class="internet-node right">
-                <span class="internet-node-label">互联网</span>
+                <span class="internet-node-label">远端 Agent</span>
                 <strong id="internetTargetName">正在发现 Agent</strong>
                 <small id="internetTargetSkill">读取 Agent Card</small>
               </div>
             </section>
             <form class="internet-form" id="internetForm">
-              <label for="internetPrompt">交给远端 Agent 的需求</label>
+              <label for="internetTargetSelect">选择接收请求的 Agent</label>
+              <select class="internet-target-select" id="internetTargetSelect" aria-describedby="internetTargetMeta">
+                <option value="">正在发现 Agent</option>
+              </select>
+              <p class="internet-target-meta" id="internetTargetMeta">正在读取公开 Agent 配置</p>
+              <label for="internetPrompt">发给远端 Agent 的消息</label>
               <textarea id="internetPrompt" maxlength="500">请为个人网站 Agent 与公网 Agent 的首次协作，给出三个简洁、可执行的下一步。</textarea>
-              <p class="internet-form-help">请求将通过远端公开 Agent Card 发现 JSON-RPC 地址，再以 A2A Task 发出。</p>
-              <button class="primary" id="internetSendButton" type="submit">发送 A2A 请求</button>
+              <p class="internet-form-help">电脑 B 模式会经公网 A2A 将消息送到另一台电脑，由 B 电脑的本地模型生成回复。</p>
+              <button class="primary" id="internetSendButton" type="submit">发送到远端 Agent</button>
               <p class="internet-error" id="internetError" role="alert"></p>
             </form>
             <section class="internet-result" id="internetResult" aria-live="polite" hidden>
@@ -784,6 +802,7 @@
               <dl class="internet-proof">
                 <div><dt>远端地址</dt><dd id="internetTargetUrl"></dd></div>
                 <div><dt>技能</dt><dd id="internetSkill"></dd></div>
+                <div><dt>模型来源</dt><dd id="internetModelSource"></dd></div>
                 <div><dt>Task ID</dt><dd id="internetTaskId"></dd></div>
               </dl>
               <p class="disclosure">这里显示的是远端 Agent 返回的真实 A2A Artifact。公网服务可能暂时离线，失败不会转为本地模拟。</p>
@@ -940,6 +959,7 @@
     let screeningCandidate = null;
     let scheduleCandidate = null;
     let internetTarget = null;
+    let internetTargets = [];
     let internetTargetPromise = null;
     let screeningRunning = false;
     const $ = (id) => document.getElementById(id);
@@ -1232,13 +1252,18 @@
         if (!response.ok) throw new Error("公网 Agent 发现失败");
         const targets = await response.json();
         if (!targets.length) throw new Error("当前没有可用的公网 Agent");
-        internetTarget = targets[0];
-        $("internetTargetName").textContent = internetTarget.name;
-        $("internetTargetSkill").textContent = internetTarget.skillName;
-        $("internetProtocol").textContent = `A2A ${internetTarget.protocolVersion}`;
-        if (!$("internetPrompt").value.trim()) {
-          $("internetPrompt").value = internetTarget.defaultPrompt;
-        }
+        internetTargets = targets;
+        const preferredTarget = targets.find(target => target.id === "computer-b") || targets[0];
+        const select = $("internetTargetSelect");
+        select.replaceChildren(...targets.map(target => {
+          const option = document.createElement("option");
+          option.value = target.id;
+          option.textContent = target.name;
+          return option;
+        }));
+        select.value = preferredTarget.id;
+        select.disabled = false;
+        setInternetTarget(preferredTarget, { resetPrompt: true });
         return internetTarget;
       })();
       try {
@@ -1246,6 +1271,17 @@
       } finally {
         internetTargetPromise = null;
       }
+    }
+
+    function setInternetTarget(target, { resetPrompt = false } = {}) {
+      internetTarget = target;
+      $("internetTargetSelect").value = target.id;
+      $("internetTargetName").textContent = target.name;
+      $("internetTargetSkill").textContent = target.skillName;
+      $("internetTargetMeta").textContent = `${target.summary} · ${target.baseUrl}`;
+      $("internetProtocol").textContent = `A2A ${target.protocolVersion}`;
+      $("internetPrompt").value = resetPrompt ? target.defaultPrompt : $("internetPrompt").value;
+      $("internetSendButton").textContent = target.id === "computer-b" ? "发送到电脑 B" : "发送到远端 Agent";
     }
 
     async function startInternetA2A(event) {
@@ -1278,17 +1314,30 @@
         $("internetTaskState").textContent = record.taskState.replace("TASK_STATE_", "");
         $("internetTargetUrl").textContent = record.targetUrl;
         $("internetSkill").textContent = `${record.skillName} · ${record.skillId}`;
+        $("internetModelSource").textContent = record.remoteProvider
+          ? `${record.targetId === "computer-b" ? "电脑 B 本地" : "远端"} · ${record.remoteProvider}${record.remoteModel ? ` / ${record.remoteModel}` : ""}`
+          : "远端未提供模型信息";
         $("internetTaskId").textContent = record.taskId;
         $("internetResult").hidden = false;
         $("internetResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (error) {
-        $("internetError").textContent = error.message || "公网 Agent 暂时不可用，请稍后重试。";
+        $("internetError").textContent = internetTarget?.id === "computer-b"
+          ? "电脑 B 未完成响应。请确认 B 电脑上的模型、Agent 服务和公网隧道正在运行。"
+          : (error.message || "公网 Agent 暂时不可用，请稍后重试。");
       } finally {
         $("internetView").classList.remove("running");
         button.disabled = false;
-        button.textContent = "发送 A2A 请求";
+        button.textContent = internetTarget?.id === "computer-b" ? "发送到电脑 B" : "发送到远端 Agent";
       }
     }
+
+    $("internetTargetSelect").addEventListener("change", () => {
+      const target = internetTargets.find(item => item.id === $("internetTargetSelect").value);
+      if (!target) return;
+      setInternetTarget(target, { resetPrompt: true });
+      $("internetResult").hidden = true;
+      $("internetError").textContent = "";
+    });
 
     function setInternetMode(mode) {
       const isChat = mode === "chat";

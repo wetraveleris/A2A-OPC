@@ -15,7 +15,20 @@ from .profiles import get_profile
 
 
 def internet_targets() -> dict[str, InternetA2ATarget]:
-    targets = {
+    targets: dict[str, InternetA2ATarget] = {}
+    remote_agent_b_url = os.getenv("OPC_REMOTE_AGENT_B_URL", "").strip().rstrip("/")
+    if remote_agent_b_url:
+        targets["computer-b"] = InternetA2ATarget(
+            id="computer-b",
+            name="电脑 B · 沈知野 Agent",
+            base_url=remote_agent_b_url,
+            protocol_version="1.0",
+            skill_id="employee_chat",
+            skill_name="Employee Chat",
+            summary="第二台电脑上的独立 Agent。请求经公网 A2A 送达后，由 B 电脑本地模型生成回复。",
+            default_prompt="你是谁？请只介绍你自己的身份、所在城市和正在做的项目。",
+        )
+    targets.update({
         "perkoon": InternetA2ATarget(
             id="perkoon",
             name="Perkoon Agent",
@@ -41,19 +54,7 @@ def internet_targets() -> dict[str, InternetA2ATarget]:
                 "请为个人网站 Agent 与公网 Agent 的首次协作，给出三个简洁、可执行的下一步。"
             ),
         )
-    }
-    public_base_url = os.getenv("OPC_PUBLIC_BASE_URL", "").rstrip("/")
-    if public_base_url.startswith("https://"):
-        targets["shen-zhiye-public"] = InternetA2ATarget(
-            id="shen-zhiye-public",
-            name="沈知野的公网 OPC Agent",
-            base_url=f"{public_base_url}/a2a/shen-zhiye",
-            protocol_version="1.0",
-            skill_id="public_inquiry",
-            skill_name="Public Inquiry",
-            summary="通过临时公网隧道暴露的 OPC Agent，回答公开资料问题。",
-            default_prompt="你是谁？请用一句话回答。",
-        )
+    })
     return targets
 
 
@@ -95,7 +96,52 @@ class InternetA2AService:
                 response_text=result.text,
             )
 
-        if target.id == "shen-zhiye-public":
+        if target.id == "computer-b":
+            payload = {
+                "protocol": "opc.employee_chat.v1",
+                "conversationId": str(uuid4()),
+                "turn": 1,
+                "senderAgentId": "opc-builder",
+                "recipientAgentId": "shen-zhiye",
+                "message": prompt,
+                "conversationTopic": "回答电脑 A 用户发来的问题",
+                "sharedContext": {
+                    "goal": "回答电脑 A 用户发来的问题",
+                    "knownFacts": [],
+                    "decisions": [],
+                    "openQuestions": [prompt],
+                },
+                "privateContextPolicy": "PUBLIC_PROFILE_ONLY",
+                "ownerCommitmentAllowed": False,
+            }
+            task_id, task_state, response = await self.communicator.send_json_to_url(
+                target.base_url,
+                payload,
+            )
+            response_text = (
+                response.get("reply")
+                or response.get("answer")
+                or response.get("shortMessage")
+                or "远端 OPC Agent 已返回结构化结果。"
+            )
+            decision_engine = response.get("debug", {}).get("decisionEngine", {})
+            return InternetA2ARecord(
+                id=str(uuid4()),
+                target_id=target.id,
+                target_name=target.name,
+                target_url=target.base_url,
+                skill_id=target.skill_id,
+                skill_name=target.skill_name,
+                prompt=prompt,
+                sent_message=json.dumps(payload, ensure_ascii=False),
+                task_id=task_id,
+                task_state=task_state,
+                response_text=str(response_text),
+                remote_provider=str(decision_engine.get("provider", "")) or None,
+                remote_model=str(decision_engine.get("model", "")) or None,
+            )
+
+        if target.skill_id == "public_inquiry":
             source = get_profile("opc-builder")
             payload = {
                 "protocol": "opc.public_inquiry.v1",
@@ -129,6 +175,12 @@ class InternetA2AService:
                 task_id=task_id,
                 task_state=task_state,
                 response_text=str(response_text),
+                remote_provider=str(
+                    response.get("decisionEngine", {}).get("provider", "")
+                ) or None,
+                remote_model=str(
+                    response.get("decisionEngine", {}).get("model", "")
+                ) or None,
             )
 
         sent_message = (

@@ -6,7 +6,10 @@ from opc_agent_platform.conversation import A2ATaskTextResult
 
 
 @pytest.mark.asyncio
-async def test_internet_a2a_demo_dispatches_to_third_party_perkoon_agent() -> None:
+async def test_internet_a2a_demo_dispatches_to_third_party_perkoon_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPC_REMOTE_AGENT_B_URL", raising=False)
     app = create_app(base_url="http://testserver", use_environment_llm=False)
     dispatched: dict[str, str] = {}
 
@@ -68,10 +71,13 @@ async def test_internet_a2a_demo_rejects_unknown_target() -> None:
 
 
 @pytest.mark.asyncio
-async def test_public_opc_target_uses_structured_json_over_public_url(
+async def test_computer_b_target_uses_employee_chat_and_returns_model_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPC_PUBLIC_BASE_URL", "https://example-tunnel.loca.lt")
+    monkeypatch.setenv(
+        "OPC_REMOTE_AGENT_B_URL",
+        "https://example-tunnel.loca.lt/agent-b/a2a/shen-zhiye",
+    )
     app = create_app(use_environment_llm=False)
     dispatched: dict[str, object] = {}
 
@@ -85,7 +91,13 @@ async def test_public_opc_target_uses_structured_json_over_public_url(
             "public-opc-task-1",
             "TASK_STATE_COMPLETED",
             {
-                "answer": "我是沈知野的 OPC Agent。",
+                "reply": "我是沈知野，一个独立开发者。",
+                "debug": {
+                    "decisionEngine": {
+                        "provider": "ollama",
+                        "model": "qwen3:1.7b",
+                    },
+                },
             },
         )
 
@@ -100,23 +112,25 @@ async def test_public_opc_target_uses_structured_json_over_public_url(
         response = await client.post(
             "/api/internet-a2a/demo",
             json={
-                "targetId": "shen-zhiye-public",
+                "targetId": "computer-b",
                 "prompt": "你是谁？请用一句话回答。",
             },
         )
 
     assert targets.status_code == 200
-    assert [target["id"] for target in targets.json()][:2] == [
-        "perkoon",
-        "aurelius",
-    ]
-    assert any(target["id"] == "shen-zhiye-public" for target in targets.json())
+    assert targets.json()[0]["id"] == "computer-b"
+    assert any(target["id"] == "computer-b" for target in targets.json())
     assert response.status_code == 201, response.text
-    assert response.json()["responseText"] == "我是沈知野的 OPC Agent。"
-    assert dispatched["agent_url"] == "https://example-tunnel.loca.lt/a2a/shen-zhiye"
+    assert response.json()["responseText"] == "我是沈知野，一个独立开发者。"
+    assert response.json()["remoteProvider"] == "ollama"
+    assert response.json()["remoteModel"] == "qwen3:1.7b"
+    assert dispatched["agent_url"] == (
+        "https://example-tunnel.loca.lt/agent-b/a2a/shen-zhiye"
+    )
     payload = dispatched["payload"]
     assert isinstance(payload, dict)
-    assert payload["protocol"] == "opc.public_inquiry.v1"
+    assert payload["protocol"] == "opc.employee_chat.v1"
     assert payload["senderAgentId"] == "opc-builder"
     assert payload["recipientAgentId"] == "shen-zhiye"
-    assert payload["question"] == "你是谁？请用一句话回答。"
+    assert payload["message"] == "你是谁？请用一句话回答。"
+    assert payload["sharedContext"]["goal"] == "回答电脑 A 用户发来的问题"

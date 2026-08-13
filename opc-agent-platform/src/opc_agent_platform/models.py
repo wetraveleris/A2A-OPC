@@ -276,7 +276,7 @@ class InternetA2ATarget(APIModel):
 
 
 class CreateInternetA2ARequest(APIModel):
-    target_id: str = "aurelius"
+    target_id: str = "computer-b"
     prompt: str = Field(min_length=1, max_length=500)
 
 
@@ -292,6 +292,8 @@ class InternetA2ARecord(APIModel):
     task_id: str
     task_state: str
     response_text: str
+    remote_provider: str | None = None
+    remote_model: str | None = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

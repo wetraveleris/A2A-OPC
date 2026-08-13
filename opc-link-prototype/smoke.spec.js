@@ -122,40 +122,54 @@ test('two Agents mutually confirm today at 15:00', async ({ page }) => {
   await expect(page.locator('#scheduleConfirmButton')).toHaveText('等待对方本人确认');
 });
 
-test('public internet A2A view shows remote task evidence', async ({ page }) => {
+test('public internet A2A view sends to computer B and shows local model evidence', async ({ page }) => {
   await page.route('**/api/internet-a2a/targets', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify([{
-      id: 'perkoon',
-      name: 'Perkoon Agent',
-      baseUrl: 'https://perkoon.com',
-      protocolVersion: '0.3.0',
-      skillId: 'describe',
-      skillName: 'Describe Capabilities',
-      summary: 'Public P2P file-transfer Agent',
-      defaultPrompt: 'Give three next steps.'
-    }])
+    body: JSON.stringify([
+      {
+        id: 'computer-b',
+        name: '电脑 B · 沈知野 Agent',
+        baseUrl: 'https://example.com/agent-b/a2a/shen-zhiye',
+        protocolVersion: '1.0',
+        skillId: 'employee_chat',
+        skillName: 'Employee Chat',
+        summary: '由 B 电脑本地模型生成回复。',
+        defaultPrompt: '你是谁？请只介绍自己的身份。'
+      },
+      {
+        id: 'perkoon',
+        name: 'Perkoon Agent',
+        baseUrl: 'https://perkoon.com',
+        protocolVersion: '0.3.0',
+        skillId: 'describe',
+        skillName: 'Describe Capabilities',
+        summary: 'Public P2P file-transfer Agent',
+        defaultPrompt: 'Give three next steps.'
+      }
+    ])
   }));
   await page.route('**/api/internet-a2a/demo', async route => {
     const payload = route.request().postDataJSON();
-    expect(payload.targetId).toBe('perkoon');
-    expect(payload.prompt).toContain('个人网站 Agent');
+    expect(payload.targetId).toBe('computer-b');
+    expect(payload.prompt).toContain('你是谁');
     await route.fulfill({
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({
         id: 'exchange-ui-1',
-        targetId: 'perkoon',
-        targetName: 'Perkoon Agent',
-        targetUrl: 'https://perkoon.com',
-        skillId: 'describe',
-        skillName: 'Describe Capabilities',
+        targetId: 'computer-b',
+        targetName: '电脑 B · 沈知野 Agent',
+        targetUrl: 'https://example.com/agent-b/a2a/shen-zhiye',
+        skillId: 'employee_chat',
+        skillName: 'Employee Chat',
         prompt: payload.prompt,
         sentMessage: `User request: ${payload.prompt}`,
         taskId: 'task-ui-1',
         taskState: 'TASK_STATE_COMPLETED',
-        responseText: 'Perkoon is a P2P file transfer service for agents and people.',
+        responseText: '我是沈知野，一个独立开发者。',
+        remoteProvider: 'ollama',
+        remoteModel: 'qwen3:1.7b',
         createdAt: new Date().toISOString()
       })
     });
@@ -164,11 +178,13 @@ test('public internet A2A view shows remote task evidence', async ({ page }) => 
   await page.goto(APP_URL);
   await page.locator('[data-go="internet"]').click();
   await expect(page.locator('#internetView')).toHaveClass(/active/);
-  await expect(page.locator('#internetTargetName')).toHaveText('Perkoon Agent');
-  await expect(page.locator('#internetProtocol')).toHaveText('A2A 0.3.0');
+  await expect(page.locator('#internetTargetSelect')).toHaveValue('computer-b');
+  await expect(page.locator('#internetTargetName')).toHaveText('电脑 B · 沈知野 Agent');
+  await expect(page.locator('#internetProtocol')).toHaveText('A2A 1.0');
 
   await page.locator('#internetSendButton').click();
-  await expect(page.locator('#internetResponse')).toContainText('P2P file transfer service');
+  await expect(page.locator('#internetResponse')).toContainText('我是沈知野');
+  await expect(page.locator('#internetModelSource')).toHaveText('电脑 B 本地 · ollama / qwen3:1.7b');
   await expect(page.locator('#internetTaskId')).toHaveText('task-ui-1');
 });
 
