@@ -193,6 +193,7 @@ test('two Agent debugger creates separate participant pages', async ({ page }) =
     const payload = route.request().postDataJSON();
     expect(payload.mode).toBe('AGENT_TAKEOVER');
     expect(payload.runPolicy).toBe('CONTINUOUS');
+    expect(payload.topology).toBe('PUBLIC_A_B');
     expect(payload.maxTurns).toBeUndefined();
     await route.fulfill({
       status: 201,
@@ -201,6 +202,9 @@ test('two Agent debugger creates separate participant pages', async ({ page }) =
         id: 'human-room-ui-1',
         mode: 'AGENT_TAKEOVER',
         state: 'AGENT_READY',
+        topology: 'PUBLIC_A_B',
+        agentAUrl: 'https://example.com/a2a/opc-builder',
+        agentBUrl: 'https://example.com/agent-b/a2a/shen-zhiye',
         participantAUrl: '/app/agent-room.html?room=human-room-ui-1&token=token-a',
         participantBUrl: '/app/agent-room.html?room=human-room-ui-1&token=token-b'
       })
@@ -213,10 +217,14 @@ test('two Agent debugger creates separate participant pages', async ({ page }) =
   await expect(page.locator('#employeeChatPanel')).toHaveClass(/active/);
   await page.locator('input[name="chatMode"][value="AGENT_TAKEOVER"]').check();
   await expect(page.locator('#employeeChatButton')).toHaveText('创建 Agent 托管会话');
-  await expect(page.locator('#employeeModeHelp')).toContainText('进入房间确认目标');
+  await expect(page.locator('#employeeAgentAUrl')).toContainText('/a2a/opc-builder');
+  await expect(page.locator('#employeeAgentBUrl')).toContainText('/agent-b/a2a/shen-zhiye');
+  await expect(page.locator('#employeeModeHelp')).toContainText('两台电脑的模型才会介入');
   await page.locator('#employeeChatButton').click();
   await expect(page.locator('#humanRoomLinks')).toBeVisible();
   await expect(page.locator('#humanRoomHint')).toContainText('点击开始托管后');
+  await expect(page.locator('#employeeAgentAUrl')).toContainText('/a2a/opc-builder');
+  await expect(page.locator('#employeeAgentBUrl')).toContainText('/agent-b/a2a/shen-zhiye');
   await expect(page.locator('#humanRoomAOpen')).toHaveAttribute('href', /token=token-a/);
   await expect(page.locator('#humanRoomBOpen')).toHaveAttribute('href', /token=token-b/);
 });

@@ -383,6 +383,11 @@ class HumanChatMessageSource(StrEnum):
     HUMAN_DIRECT = "HUMAN_DIRECT"
 
 
+class HumanChatTopology(StrEnum):
+    LOCAL = "LOCAL"
+    PUBLIC_A_B = "PUBLIC_A_B"
+
+
 class CreateHumanChatRequest(APIModel):
     from_agent_id: str = "opc-builder"
     to_agent_id: str = "shen-zhiye"
@@ -390,6 +395,7 @@ class CreateHumanChatRequest(APIModel):
     max_turns: int | None = Field(default=None, ge=1, le=100)
     run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
     mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
+    topology: HumanChatTopology = HumanChatTopology.LOCAL
 
 
 class HumanChatDraft(APIModel):
@@ -442,6 +448,8 @@ class HumanChatRecord(APIModel):
     max_turns: int | None = None
     run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
     mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
+    topology: HumanChatTopology = HumanChatTopology.LOCAL
+    agent_urls: dict[str, str] = Field(default_factory=dict)
     state: HumanChatState
     context: EmployeeChatContext
     pending_draft: HumanChatDraft | None = None
@@ -467,6 +475,8 @@ class HumanChatParticipant(APIModel):
     agent_id: str
     agent_name: str
     role: str
+    computer_name: str
+    agent_url: str
 
 
 class HumanChatView(APIModel):
@@ -476,6 +486,7 @@ class HumanChatView(APIModel):
     max_turns: int | None = None
     run_policy: HumanChatRunPolicy
     mode: HumanChatMode
+    topology: HumanChatTopology
     version: int
     viewer: HumanChatParticipant
     other: HumanChatParticipant
@@ -498,6 +509,9 @@ class HumanChatCreated(APIModel):
     id: str
     mode: HumanChatMode
     state: HumanChatState
+    topology: HumanChatTopology
+    agent_a_url: str
+    agent_b_url: str
     participant_a_url: str
     participant_b_url: str
 

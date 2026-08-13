@@ -33,6 +33,7 @@ from .models import (
     HumanChatSwitchModeRequest,
     HumanChatRunPolicy,
     HumanChatState,
+    HumanChatTopology,
     HumanChatView,
 )
 from .profiles import get_profile
@@ -88,20 +89,27 @@ class HumanChatService:
         self.store = store
         self.communicator = communicator
 
-    def agent_url(self, agent_id: str) -> str:
-        environment_key = "OPC_EMPLOYEE_AGENT_URL_" + agent_id.upper().replace(
-            "-", "_"
-        )
-        configured = os.getenv(environment_key, "").strip().rstrip("/")
-        if configured:
-            return configured
-        return f"{self.communicator.base_url}/a2a/{agent_id}"
+    @staticmethod
+    def agent_url(record: HumanChatRecord, agent_id: str) -> str:
+        try:
+            return record.agent_urls[agent_id]
+        except KeyError as exc:
+            raise ValueError(f"Conversation has no endpoint for Agent {agent_id}") from exc
 
     async def create(self, request: CreateHumanChatRequest) -> HumanChatCreated:
         source = get_profile(request.from_agent_id)
         target = get_profile(request.to_agent_id)
         if source.id == target.id:
             raise ValueError("Human Agent chat requires two different Agents")
+
+        source_url = f"{self.communicator.base_url}/a2a/{source.id}"
+        target_url = f"{self.communicator.base_url}/a2a/{target.id}"
+        if request.topology == HumanChatTopology.PUBLIC_A_B:
+            if source.id != "opc-builder" or target.id != "shen-zhiye":
+                raise ValueError("Public A/B topology requires opc-builder and shen-zhiye")
+            target_url = os.getenv("OPC_REMOTE_AGENT_B_URL", "").strip().rstrip("/")
+            if not target_url:
+                raise ValueError("Computer B public A2A URL is not configured")
 
         conversation_id = secrets.token_urlsafe(18)
         token_a = secrets.token_urlsafe(24)
@@ -121,6 +129,8 @@ class HumanChatService:
             max_turns=request.max_turns,
             run_policy=run_policy,
             mode=request.mode,
+            topology=request.topology,
+            agent_urls={source.id: source_url, target.id: target_url},
             state=(
                 HumanChatState.AGENT_READY
                 if is_takeover
@@ -168,6 +178,9 @@ class HumanChatService:
             id=record.id,
             mode=record.mode,
             state=record.state,
+            topology=record.topology,
+            agent_a_url=source_url,
+            agent_b_url=target_url,
             participant_a_url=f"{page}?room={record.id}&token={token_a}",
             participant_b_url=f"{page}?room={record.id}&token={token_b}",
         )
@@ -185,6 +198,15 @@ class HumanChatService:
             agent_id=agent_id,
             agent_name=profile.name,
             role=profile.role,
+            computer_name=(
+                "电脑 A"
+                if record.topology == HumanChatTopology.PUBLIC_A_B
+                and agent_id == record.from_agent_id
+                else "电脑 B"
+                if record.topology == HumanChatTopology.PUBLIC_A_B
+                else "当前服务"
+            ),
+            agent_url=self.agent_url(record, agent_id),
         )
 
     def view(self, conversation_id: str, token: str) -> HumanChatView:
@@ -213,6 +235,7 @@ class HumanChatService:
             max_turns=record.max_turns,
             run_policy=record.run_policy,
             mode=record.mode,
+            topology=record.topology,
             version=record.version,
             viewer=self._participant(record, viewer_id),
             other=self._participant(record, other_id),
@@ -317,7 +340,7 @@ class HumanChatService:
                     "ownerCommitmentAllowed": False,
                 },
             }
-            agent_url = self.agent_url(recipient_id)
+            agent_url = self.agent_url(record, recipient_id)
             try:
                 task_id, task_state, response = await self.communicator.send_json_to_url(
                     agent_url,
@@ -588,7 +611,7 @@ class HumanChatService:
                 next_turn = draft.turn + 1
                 context_before = record.context.model_copy(deep=True)
                 payload = self._payload(record, next_turn, speaker_id, recipient_id, message, context_before)
-                agent_url = self.agent_url(recipient_id)
+                agent_url = self.agent_url(record, recipient_id)
                 try:
                     task_id, task_state, response = await self.communicator.send_json_to_url(agent_url, payload)
                     patch = EmployeeChatContextPatch.model_validate(response.get("contextPatch", {}))
@@ -825,7 +848,7 @@ class HumanChatService:
             last.text,
             context_before,
         )
-        agent_url = self.agent_url(recipient_id)
+        agent_url = self.agent_url(record, recipient_id)
         task_id, task_state, response = await self.communicator.send_json_to_url(
             agent_url,
             payload,

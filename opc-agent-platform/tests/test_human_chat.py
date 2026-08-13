@@ -14,6 +14,75 @@ def _access(url: str) -> tuple[str, str]:
 
 
 @pytest.mark.asyncio
+async def test_public_computer_topology_supports_all_control_modes_and_routes_to_b(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    remote_b_url = "https://public.example/agent-b/a2a/shen-zhiye"
+    monkeypatch.setenv("OPC_REMOTE_AGENT_B_URL", remote_b_url)
+    app = create_app(base_url="https://public.example", use_environment_llm=False)
+    dispatched: list[tuple[str, dict[str, object]]] = []
+
+    async def fake_send(
+        agent_url: str,
+        payload: dict[str, object],
+    ) -> tuple[str, str, dict[str, object]]:
+        dispatched.append((agent_url, payload))
+        return (
+            "task-from-computer-b",
+            "TASK_STATE_COMPLETED",
+            {"reply": "我是电脑 B 上的沈知野 Agent。", "contextPatch": {}},
+        )
+
+    app.state.human_chat_service.communicator.send_json_to_url = fake_send
+    transport = httpx.ASGITransport(app=app)
+    created_rooms: dict[str, dict[str, object]] = {}
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        for mode in ("HUMAN_APPROVAL", "AGENT_TAKEOVER", "HUMAN_DIRECT"):
+            response = await client.post(
+                "/api/human-agent-chats",
+                json={
+                    "goal": f"验证 {mode} 的公网双电脑 Agent 沟通",
+                    "mode": mode,
+                    "topology": "PUBLIC_A_B",
+                },
+            )
+            assert response.status_code == 201, response.text
+            created_rooms[mode] = response.json()
+            assert response.json()["topology"] == "PUBLIC_A_B"
+            assert response.json()["agentAUrl"] == (
+                "https://public.example/a2a/opc-builder"
+            )
+            assert response.json()["agentBUrl"] == remote_b_url
+
+        approval = created_rooms["HUMAN_APPROVAL"]
+        room, token_a = _access(str(approval["participantAUrl"]))
+        view = (
+            await client.get(
+                f"/api/human-agent-chats/{room}", params={"token": token_a}
+            )
+        ).json()
+        assert view["viewer"]["computerName"] == "电脑 A"
+        assert view["other"]["computerName"] == "电脑 B"
+        approved = await client.post(
+            f"/api/human-agent-chats/{room}/approve",
+            params={"token": token_a},
+            json={
+                "message": "你是谁？",
+                "expectedVersion": view["version"],
+            },
+        )
+
+    assert approved.status_code == 200, approved.text
+    assert dispatched[0][0] == remote_b_url
+    assert dispatched[0][1]["recipientAgentId"] == "shen-zhiye"
+    assert approved.json()["a2ATurns"] == []
+
+
+@pytest.mark.asyncio
 async def test_two_users_approve_private_agent_drafts_turn_by_turn() -> None:
     app = create_app(base_url="http://testserver", use_environment_llm=False)
     transport = httpx.ASGITransport(app=app)

@@ -811,15 +811,15 @@
             <div class="employee-chat" id="employeeChatPanel">
               <section class="internet-route employee-route" aria-label="双 Agent 通信路径">
                 <div class="internet-node">
-                  <span class="internet-node-label">Agent A</span>
+                  <span class="internet-node-label">电脑 A · Agent</span>
                   <strong>陈默 Agent</strong>
-                  <small id="employeeAgentAUrl">/a2a/opc-builder</small>
+                  <small id="employeeAgentAUrl">正在读取 A 端地址</small>
                 </div>
                 <div class="internet-hop" aria-hidden="true"></div>
                 <div class="internet-node right">
-                  <span class="internet-node-label">Agent B</span>
+                  <span class="internet-node-label">电脑 B · Agent</span>
                   <strong>沈知野 Agent</strong>
-                  <small id="employeeAgentBUrl">/a2a/shen-zhiye</small>
+                  <small id="employeeAgentBUrl">正在读取 B 端地址</small>
                 </div>
               </section>
               <form class="internet-form" id="employeeChatForm">
@@ -1282,6 +1282,10 @@
       $("internetProtocol").textContent = `A2A ${target.protocolVersion}`;
       $("internetPrompt").value = resetPrompt ? target.defaultPrompt : $("internetPrompt").value;
       $("internetSendButton").textContent = target.id === "computer-b" ? "发送到电脑 B" : "发送到远端 Agent";
+      if (target.id === "computer-b") {
+        $("employeeAgentAUrl").textContent = `${window.location.origin}/a2a/opc-builder`;
+        $("employeeAgentBUrl").textContent = target.baseUrl;
+      }
     }
 
     async function startInternetA2A(event) {
@@ -1485,6 +1489,7 @@
             toAgentId: "shen-zhiye",
             goal,
             runPolicy: "CONTINUOUS",
+            topology: "PUBLIC_A_B",
             mode
           })
         });
@@ -1493,6 +1498,8 @@
           throw new Error(error.detail || `会话创建失败 (${response.status})`);
         }
         const room = await response.json();
+        $("employeeAgentAUrl").textContent = room.agentAUrl;
+        $("employeeAgentBUrl").textContent = room.agentBUrl;
         const aUrl = new URL(room.participantAUrl, window.location.origin).href;
         const bUrl = new URL(room.participantBUrl, window.location.origin).href;
         $("humanRoomAUrl").textContent = aUrl;
@@ -1500,9 +1507,9 @@
         $("humanRoomAOpen").href = aUrl;
         $("humanRoomBOpen").href = bUrl;
         $("humanRoomHint").textContent = takeover
-          ? "分别打开两个沟通窗口。任一用户点击开始托管后，Agent 才会自动往返。"
-          : direct ? "分别打开两个沟通窗口。双方本人可以直接发送消息，并随时交回 Agent。"
-          : "分别在两个窗口打开。每一方只能批准自己 Agent 的草稿。";
+          ? "A、B 电脑各运行一个 Agent。任一用户点击开始托管后，两个本地模型才会经公网自动往返。"
+          : direct ? "分别打开 A、B 用户窗口。双方本人可以直接发送消息，并随时交回两台电脑的 Agent。"
+          : "分别打开 A、B 用户窗口。每一方只能批准自己电脑上 Agent 的草稿。";
         $("humanRoomLinks").hidden = false;
         $("humanRoomLinks").scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (error) {
@@ -1518,9 +1525,9 @@
       const takeover = mode === "AGENT_TAKEOVER";
       const direct = mode === "HUMAN_DIRECT";
       $("employeeModeHelp").textContent = takeover
-        ? "先创建两个沟通窗口。进入房间确认目标并点击开始后，模型才会介入。"
-        : direct ? "创建长期人工沟通窗口，双方可在房间内随时切换人工审核或 Agent 托管。"
-        : "创建两个独立页面。每轮草稿经所属用户批准后才会发送。";
+        ? "先创建 A、B 两个沟通窗口。确认目标并点击开始后，两台电脑的模型才会介入。"
+        : direct ? "创建 A、B 人工沟通窗口，双方可随时切换人工审核或两端 Agent 托管。"
+        : "创建 A、B 两个独立页面。每轮草稿经对应电脑的用户批准后才会发送。";
       $("employeeChatButton").textContent = takeover ? "创建 Agent 托管会话" : direct ? "创建人工直聊会话" : "创建人工审核会话";
     }
 

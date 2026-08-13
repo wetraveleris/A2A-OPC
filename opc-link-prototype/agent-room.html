@@ -221,7 +221,10 @@
       const head = document.createElement("div");
       head.className = "message-head";
       const name = document.createElement("strong");
-      name.textContent = message.source === "HUMAN_DIRECT" ? `${profile.agentName}本人` : `${profile.agentName}的 Agent`;
+      const computerName = profile.computerName || (profile.side === "a" ? "电脑 A" : "电脑 B");
+      name.textContent = message.source === "HUMAN_DIRECT"
+        ? `${profile.agentName}本人 · ${computerName}`
+        : `${profile.agentName}的 Agent · ${computerName}`;
       const turn = document.createElement("span");
       turn.textContent = message.turn === 0 ? "INITIAL" : `TURN ${message.turn}`;
       head.append(name, turn);
@@ -252,7 +255,7 @@
         copy.textContent = takeover
           ? current.state === "AGENT_READY"
             ? "目前没有调用模型。确认目标后，点击下方按钮才会授权 Agent 开始自动沟通。"
-            : "初始需求将由本地模型自动发送。第一轮 A2A Task 完成后，会话和协议记录会实时出现在这里。"
+            : "初始需求将送到对应电脑的本地模型。第一轮 A2A Task 完成后，会话和协议记录会实时出现在这里。"
           : direct ? "双方用户直接发送消息，Agent 不会自动回复。随时可以重新交给 Agent 托管。"
           : current.canAct ? "你可以修改措辞。批准后才会通过 A2A 发给对方 Agent。" : "初始需求尚未批准，因此你暂时看不到草稿内容。";
         empty.append(title, copy);
@@ -301,16 +304,20 @@
     }
 
     function renderEvidence() {
+      const endpointSummary = document.createElement("pre");
+      const viewerComputer = current.viewer.computerName || "电脑 A";
+      const otherComputer = current.other.computerName || "电脑 B";
+      endpointSummary.textContent = `${viewerComputer}: ${current.viewer.agentUrl || "等待端点信息"}\n${otherComputer}: ${current.other.agentUrl || "等待端点信息"}`;
       if (!current.a2ATurns.length) {
         const empty = document.createElement("div");
         empty.className = "context-group";
         empty.textContent = current.mode === "AGENT_TAKEOVER"
           ? "首个 A2A Task 完成后，请求、响应和 Task ID 会自动记录在这里。"
           : "对方批准回复后，协议证据才会共享。";
-        $("evidence").replaceChildren(empty);
+        $("evidence").replaceChildren(endpointSummary, empty);
         return;
       }
-      $("evidence").replaceChildren(...current.a2ATurns.map(turn => {
+      $("evidence").replaceChildren(endpointSummary, ...current.a2ATurns.map(turn => {
         const details = document.createElement("details");
         const summary = document.createElement("summary");
         const label = document.createElement("span");
@@ -363,10 +370,10 @@
         $("waiting").hidden = false;
         if (current.state === "AGENT_READY") {
           $("waitingTitle").textContent = "等待用户选择托管";
-          $("waitingText").textContent = "房间和沟通目标已经就绪。点击开始后，本地模型才会介入并自动发送。";
+          $("waitingText").textContent = "房间和沟通目标已经就绪。点击开始后，电脑 A 与电脑 B 的本地模型才会介入。";
         } else if (current.state === "AGENT_RUNNING") {
-          $("waitingTitle").textContent = "本地模型正在自动沟通";
-          $("waitingText").textContent = "Agent 收到消息后会自动生成并发送下一轮；任一用户都可以停止接管。";
+          $("waitingTitle").textContent = "两台电脑的 Agent 正在自动沟通";
+          $("waitingText").textContent = "消息通过公网 A2A 在电脑 A 与电脑 B 之间往返；任一用户都可以停止接管。";
         } else if (current.state === "STOPPING") {
           $("waitingTitle").textContent = "正在停止 Agent 接管";
           $("waitingText").textContent = "当前已经发出的 A2A 请求可能会完成，但不会再发送下一轮。";
@@ -404,18 +411,20 @@
       const takeover = view.mode === "AGENT_TAKEOVER";
       const direct = view.mode === "HUMAN_DIRECT";
       $("app").hidden = false;
+      const viewerComputer = view.viewer.computerName || (view.viewer.side === "a" ? "电脑 A" : "电脑 B");
+      const otherComputer = view.other.computerName || (view.other.side === "a" ? "电脑 A" : "电脑 B");
       $("viewerAvatar").textContent = view.viewer.agentName.slice(0, 1);
-      $("viewerName").textContent = `${view.viewer.agentName} · 用户 ${view.viewer.side.toUpperCase()}`;
-      $("viewerRole").textContent = view.viewer.role;
+      $("viewerName").textContent = `${view.viewer.agentName} · ${viewerComputer}`;
+      $("viewerRole").textContent = `${view.viewer.role} · 用户 ${view.viewer.side.toUpperCase()}`;
       $("roomState").textContent = stateLabel(view.state);
       $("roomGoal").textContent = view.goal;
       const runLabel = view.runPolicy === "CONTINUOUS" ? "持续会话" : `限定 ${view.maxTurns} 轮`;
-      $("roomRelation").textContent = `${view.viewer.agentName}与${view.other.agentName}的长期沟通 · ${view.messages.length} 条消息 · ${view.a2ATurns.length} 个 A2A Task · ${runLabel}`;
+      $("roomRelation").textContent = `${viewerComputer} ↔ ${otherComputer} · ${view.messages.length} 条消息 · ${view.a2ATurns.length} 个 A2A Task · ${runLabel}`;
       $("modeTitle").textContent = takeover ? (view.state === "AGENT_READY" ? "Agent 托管待授权" : view.state === "STOPPED" ? "Agent 对话已暂停" : "Agent 自动托管") : direct ? "人工直接沟通" : "逐条人工审核";
       $("modeDescription").textContent = takeover
         ? view.state === "AGENT_READY"
           ? "当前仅建立沟通窗口，模型尚未介入。任一参与用户可启动托管。"
-          : "本地模型收到消息后自动回复；任一用户都可以旁观并停止。"
+          : "电脑 A 与电脑 B 的本地模型收到消息后自动回复；任一用户都可以旁观并停止。"
         : direct ? "双方本人直接发送消息，模型不介入；恢复托管后，Agent 会从完整聊天上下文继续。"
         : "每轮发送前由对应用户审核，可修改草稿或拒绝会话。";
       $("modeIndicator").textContent = takeover ? (view.state === "AGENT_READY" ? "AWAITING CONSENT" : view.state === "AGENT_RUNNING" ? "AUTO ACTIVE" : "AUTO CONTROL") : direct ? "HUMAN DIRECT" : "HUMAN IN LOOP";
