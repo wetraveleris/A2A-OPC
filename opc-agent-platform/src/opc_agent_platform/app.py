@@ -16,13 +16,30 @@ from fastapi.staticfiles import StaticFiles
 from .a2a_runtime import mount_a2a_agents
 from .conversation import A2ACommunicator, ScreeningService
 from .deepseek import DeepSeekClient
+from .employee_chat import EmployeeChatService, EmployeeChatStore
+from .human_chat import HumanChatService, HumanChatStore
+from .internet_a2a import InternetA2AService
 from .live_conversation import LiveConversationService, LiveConversationStore
 from .models import (
     AgentProfile,
+    CreateInternetA2ARequest,
+    CreateEmployeeChatRequest,
+    EmployeeChatRecord,
+    CreateHumanChatRequest,
+    HumanChatApprovalRequest,
+    HumanChatCreated,
+    HumanChatDirectMessageRequest,
+    HumanChatRejectionRequest,
+    HumanChatStartRequest,
+    HumanChatStopRequest,
+    HumanChatSwitchModeRequest,
+    HumanChatView,
     CreateLiveScheduleRequest,
     CreateScreeningRequest,
     CreateScheduleInquiryRequest,
     DecisionRequest,
+    InternetA2ARecord,
+    InternetA2ATarget,
     LiveConversationRecord,
     ScheduleConfirmationRequest,
     ScheduleRecord,
@@ -87,12 +104,28 @@ def create_app(
         store=live_conversation_store,
         communicator=communicator,
     )
+    internet_a2a_service = InternetA2AService(communicator=communicator)
+    employee_chat_store = EmployeeChatStore()
+    employee_chat_service = EmployeeChatService(
+        store=employee_chat_store,
+        communicator=communicator,
+    )
+    human_chat_store = HumanChatStore()
+    human_chat_service = HumanChatService(
+        store=human_chat_store,
+        communicator=communicator,
+    )
     app.state.screening_store = store
     app.state.screening_service = screening_service
     app.state.schedule_store = schedule_store
     app.state.schedule_service = schedule_service
     app.state.live_conversation_store = live_conversation_store
     app.state.live_conversation_service = live_conversation_service
+    app.state.internet_a2a_service = internet_a2a_service
+    app.state.employee_chat_store = employee_chat_store
+    app.state.employee_chat_service = employee_chat_service
+    app.state.human_chat_store = human_chat_store
+    app.state.human_chat_service = human_chat_service
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -101,7 +134,9 @@ def create_app(
             "protocol": "A2A 1.0",
             "runtime": "multi-tenant",
             "decisionEngine": (
-                "deepseek" if resolved_deepseek_client else "rules"
+                resolved_deepseek_client.provider
+                if resolved_deepseek_client
+                else "rules"
             ),
             "model": (
                 resolved_deepseek_client.model
@@ -120,6 +155,235 @@ def create_app(
             return get_profile(agent_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/internet-a2a/targets", response_model=list[InternetA2ATarget])
+    async def list_internet_a2a_targets() -> list[InternetA2ATarget]:
+        return internet_a2a_service.list_targets()
+
+    @app.post(
+        "/api/internet-a2a/demo",
+        response_model=InternetA2ARecord,
+        status_code=201,
+    )
+    async def create_internet_a2a_demo(
+        request: CreateInternetA2ARequest,
+    ) -> InternetA2ARecord:
+        try:
+            return await internet_a2a_service.send(request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Internet A2A demo failed: {exc}",
+            ) from exc
+
+    @app.post(
+        "/api/employee-chats",
+        response_model=EmployeeChatRecord,
+        status_code=201,
+    )
+    async def create_employee_chat(
+        request: CreateEmployeeChatRequest,
+    ) -> EmployeeChatRecord:
+        try:
+            return await employee_chat_service.create(request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Employee A2A chat failed: {exc}",
+            ) from exc
+
+    @app.get(
+        "/api/employee-chats/{conversation_id}",
+        response_model=EmployeeChatRecord,
+    )
+    async def get_employee_chat(conversation_id: str) -> EmployeeChatRecord:
+        try:
+            return await employee_chat_store.get(conversation_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/human-agent-chats",
+        response_model=HumanChatCreated,
+        status_code=201,
+    )
+    async def create_human_agent_chat(
+        request: CreateHumanChatRequest,
+    ) -> HumanChatCreated:
+        try:
+            return await human_chat_service.create(request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get(
+        "/api/human-agent-chats/{conversation_id}",
+        response_model=HumanChatView,
+    )
+    async def get_human_agent_chat(
+        conversation_id: str,
+        token: str,
+    ) -> HumanChatView:
+        try:
+            return human_chat_service.view(conversation_id, token)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.get("/api/human-agent-chats/{conversation_id}/events")
+    async def stream_human_agent_chat(
+        conversation_id: str,
+        token: str,
+    ) -> StreamingResponse:
+        try:
+            human_chat_service.view(conversation_id, token)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        return StreamingResponse(
+            human_chat_service.stream(conversation_id, token),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/approve",
+        response_model=HumanChatView,
+    )
+    async def approve_human_agent_draft(
+        conversation_id: str,
+        token: str,
+        request: HumanChatApprovalRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.approve(conversation_id, token, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Human-in-the-loop A2A turn failed: {exc}",
+            ) from exc
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/reject",
+        response_model=HumanChatView,
+    )
+    async def reject_human_agent_draft(
+        conversation_id: str,
+        token: str,
+        request: HumanChatRejectionRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.reject(conversation_id, token, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/mode",
+        response_model=HumanChatView,
+    )
+    async def switch_human_agent_chat_mode(
+        conversation_id: str,
+        token: str,
+        request: HumanChatSwitchModeRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.switch_mode(conversation_id, token, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Mode switch failed: {exc}",
+            ) from exc
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/messages",
+        response_model=HumanChatView,
+    )
+    async def send_human_chat_message(
+        conversation_id: str,
+        token: str,
+        request: HumanChatDirectMessageRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.send_direct_message(
+                conversation_id,
+                token,
+                request,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/start",
+        response_model=HumanChatView,
+    )
+    async def start_human_agent_takeover(
+        conversation_id: str,
+        token: str,
+        request: HumanChatStartRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.start(conversation_id, token, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/human-agent-chats/{conversation_id}/stop",
+        response_model=HumanChatView,
+    )
+    async def stop_human_agent_takeover(
+        conversation_id: str,
+        token: str,
+        request: HumanChatStopRequest,
+    ) -> HumanChatView:
+        try:
+            return await human_chat_service.stop(conversation_id, token, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/screenings", response_model=ScreeningRecord, status_code=201)
     async def create_screening(

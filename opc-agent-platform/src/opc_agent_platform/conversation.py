@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
@@ -12,6 +14,7 @@ from a2a.helpers import (
     get_data_parts,
     get_message_text,
     new_data_message,
+    new_text_message,
 )
 from a2a.types import Role, SendMessageRequest, TaskState
 
@@ -40,6 +43,28 @@ class A2ATextEvent:
     task_state: str = ""
 
 
+@dataclass(frozen=True)
+class A2ATaskTextResult:
+    task_id: str
+    task_state: str
+    text: str
+    data: dict[str, Any] | None = None
+
+
+def _artifact_to_text(artifact: Any) -> tuple[str, dict[str, Any] | None]:
+    text = (get_artifact_text(artifact) or "").strip()
+    if text:
+        return text, None
+
+    data_parts = get_data_parts(artifact.parts)
+    if not data_parts:
+        raise A2AProtocolError("Agent result Artifact did not include text or JSON")
+    if len(data_parts) == 1 and isinstance(data_parts[0], dict):
+        data = data_parts[0]
+        return json.dumps(data, ensure_ascii=False, indent=2), data
+    return json.dumps(data_parts, ensure_ascii=False, indent=2), None
+
+
 class A2ACommunicator:
     def __init__(
         self,
@@ -62,6 +87,107 @@ class A2ACommunicator:
         ) as http_client:
             client = await create_client(
                 agent=target_url,
+                client_config=ClientConfig(
+                    streaming=False,
+                    httpx_client=http_client,
+                    accepted_output_modes=["application/json"],
+                ),
+            )
+            events = [
+                event
+                async for event in client.send_message(
+                    SendMessageRequest(
+                        message=new_data_message(
+                            payload,
+                            media_type="application/json",
+                            role=Role.ROLE_USER,
+                        )
+                    )
+                )
+            ]
+
+        if len(events) != 1 or not events[0].HasField("task"):
+            raise A2AProtocolError("Agent did not return a completed Task")
+        task = events[0].task
+        state_name = TaskState.Name(task.status.state)
+        if task.status.state != TaskState.TASK_STATE_COMPLETED:
+            detail = (
+                get_message_text(task.status.message)
+                if task.status.HasField("message")
+                else "no error detail"
+            )
+            raise A2AProtocolError(f"Agent Task ended in {state_name}: {detail}")
+        if len(task.artifacts) != 1:
+            raise A2AProtocolError("Agent Task must contain one result Artifact")
+        data_parts = get_data_parts(task.artifacts[0].parts)
+        if len(data_parts) != 1 or not isinstance(data_parts[0], dict):
+            raise A2AProtocolError("Agent result Artifact is not structured JSON")
+        return task.id, state_name, data_parts[0]
+
+    async def send_text_to_url(
+        self,
+        agent_url: str,
+        prompt: str,
+    ) -> A2ATaskTextResult:
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=60.0,
+            follow_redirects=True,
+        ) as http_client:
+            client = await create_client(
+                agent=agent_url.rstrip("/"),
+                client_config=ClientConfig(
+                    streaming=False,
+                    httpx_client=http_client,
+                    accepted_output_modes=["text/plain", "application/json"],
+                ),
+            )
+            events = [
+                event
+                async for event in client.send_message(
+                    SendMessageRequest(
+                        message=new_text_message(
+                            prompt,
+                            media_type="text/plain",
+                            role=Role.ROLE_USER,
+                        )
+                    )
+                )
+            ]
+
+        if len(events) != 1 or not events[0].HasField("task"):
+            raise A2AProtocolError("Agent did not return a completed Task")
+        task = events[0].task
+        state_name = TaskState.Name(task.status.state)
+        if task.status.state != TaskState.TASK_STATE_COMPLETED:
+            detail = (
+                get_message_text(task.status.message)
+                if task.status.HasField("message")
+                else "no error detail"
+            )
+            raise A2AProtocolError(f"Agent Task ended in {state_name}: {detail}")
+        if not task.artifacts:
+            raise A2AProtocolError("Agent Task did not include a result Artifact")
+        text, data = _artifact_to_text(task.artifacts[0])
+        return A2ATaskTextResult(
+            task_id=task.id,
+            task_state=state_name,
+            text=text,
+            data=data,
+        )
+
+    async def send_json_to_url(
+        self,
+        agent_url: str,
+        payload: dict[str, Any],
+    ) -> tuple[str, str, dict[str, Any]]:
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=60.0,
+            follow_redirects=True,
+        ) as http_client:
+            client = await create_client(
+                agent=agent_url.rstrip("/"),
                 client_config=ClientConfig(
                     streaming=False,
                     httpx_client=http_client,
@@ -239,7 +365,7 @@ class ScreeningService:
                     complementarity=decision.complementarity,
                     risks=decision.risks,
                     unconfirmed=decision.unconfirmed,
-                    generated_by="deepseek",
+                    generated_by=self.deepseek_client.provider,
                     model=self.deepseek_client.model,
                     token_usage=total_usage,
                 )

@@ -85,7 +85,7 @@ class MatchReport(APIModel):
     risks: list[str]
     unconfirmed: list[str]
     evidence_task_ids: list[str] = Field(default_factory=list)
-    generated_by: Literal["rules", "deepseek"] = "rules"
+    generated_by: Literal["rules", "deepseek", "ollama"] = "rules"
     model: str | None = None
     token_usage: ModelUsage | None = None
 
@@ -262,3 +262,266 @@ class LiveConversationRecord(APIModel):
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+
+class InternetA2ATarget(APIModel):
+    id: str
+    name: str
+    base_url: str
+    protocol_version: str
+    skill_id: str
+    skill_name: str
+    summary: str
+    default_prompt: str
+
+
+class CreateInternetA2ARequest(APIModel):
+    target_id: str = "aurelius"
+    prompt: str = Field(min_length=1, max_length=500)
+
+
+class InternetA2ARecord(APIModel):
+    id: str
+    target_id: str
+    target_name: str
+    target_url: str
+    skill_id: str
+    skill_name: str
+    prompt: str
+    sent_message: str
+    task_id: str
+    task_state: str
+    response_text: str
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class EmployeeChatContext(APIModel):
+    goal: str
+    known_facts: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+
+
+class EmployeeChatContextPatch(APIModel):
+    known_facts_add: list[str] = Field(default_factory=list)
+    decisions_add: list[str] = Field(default_factory=list)
+    open_questions_add: list[str] = Field(default_factory=list)
+    open_questions_resolved: list[str] = Field(default_factory=list)
+
+
+class CreateEmployeeChatRequest(APIModel):
+    from_agent_id: str = "opc-builder"
+    to_agent_id: str = "shen-zhiye"
+    goal: str = Field(min_length=1, max_length=500)
+    max_turns: int = Field(default=4, ge=2, le=6)
+
+
+class EmployeeChatTurn(APIModel):
+    turn: int
+    from_agent_id: str
+    to_agent_id: str
+    agent_card_url: str
+    jsonrpc_url: str
+    jsonrpc_method: str = "message/send"
+    task_id: str
+    task_state: str
+    request: dict[str, Any]
+    response: dict[str, Any]
+    context_before: EmployeeChatContext
+    context_after: EmployeeChatContext
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class EmployeeChatRecord(APIModel):
+    id: str
+    from_agent_id: str
+    to_agent_id: str
+    goal: str
+    state: Literal["COMPLETED", "FAILED"]
+    protocol: str = "opc.employee_chat.v1"
+    context: EmployeeChatContext
+    turns: list[EmployeeChatTurn] = Field(default_factory=list)
+    error: str | None = None
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class HumanChatState(StrEnum):
+    WAITING_OWNER_A = "WAITING_OWNER_A"
+    WAITING_OWNER_B = "WAITING_OWNER_B"
+    AGENT_READY = "AGENT_READY"
+    AGENT_RUNNING = "AGENT_RUNNING"
+    STOPPING = "STOPPING"
+    STOPPED = "STOPPED"
+    HUMAN_DIRECT = "HUMAN_DIRECT"
+    COMPLETED = "COMPLETED"
+    REJECTED = "REJECTED"
+    FAILED = "FAILED"
+
+
+class HumanChatMode(StrEnum):
+    HUMAN_APPROVAL = "HUMAN_APPROVAL"
+    AGENT_TAKEOVER = "AGENT_TAKEOVER"
+    HUMAN_DIRECT = "HUMAN_DIRECT"
+
+
+class HumanChatRunPolicy(StrEnum):
+    CONTINUOUS = "CONTINUOUS"
+    LIMITED = "LIMITED"
+
+
+class HumanChatMessageSource(StrEnum):
+    AGENT_AUTO = "AGENT_AUTO"
+    AGENT_APPROVED = "AGENT_APPROVED"
+    HUMAN_DIRECT = "HUMAN_DIRECT"
+
+
+class CreateHumanChatRequest(APIModel):
+    from_agent_id: str = "opc-builder"
+    to_agent_id: str = "shen-zhiye"
+    goal: str = Field(min_length=1, max_length=500)
+    max_turns: int | None = Field(default=None, ge=1, le=100)
+    run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
+    mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
+
+
+class HumanChatDraft(APIModel):
+    turn: int
+    speaker_agent_id: str
+    recipient_agent_id: str
+    original_text: str
+    context_patch: EmployeeChatContextPatch = Field(
+        default_factory=EmployeeChatContextPatch
+    )
+    source_task_id: str | None = None
+    source_task_state: str | None = None
+    request: dict[str, Any] | None = None
+    response: dict[str, Any] | None = None
+    already_sent: bool = False
+
+
+class HumanChatMessage(APIModel):
+    turn: int
+    speaker_agent_id: str
+    recipient_agent_id: str
+    text: str
+    original_text: str
+    human_edited: bool
+    human_approved: bool = True
+    source: HumanChatMessageSource = HumanChatMessageSource.AGENT_APPROVED
+    approved_by_agent_id: str
+    source_task_id: str | None = None
+    source_task_state: str | None = None
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class HumanChatAuditEvent(APIModel):
+    sequence: int
+    action: str
+    actor_agent_id: str
+    detail: str
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class HumanChatRecord(APIModel):
+    id: str
+    from_agent_id: str
+    to_agent_id: str
+    goal: str
+    max_turns: int | None = None
+    run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
+    mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
+    state: HumanChatState
+    context: EmployeeChatContext
+    pending_draft: HumanChatDraft | None = None
+    messages: list[HumanChatMessage] = Field(default_factory=list)
+    a2a_turns: list[EmployeeChatTurn] = Field(default_factory=list)
+    audit: list[HumanChatAuditEvent] = Field(default_factory=list)
+    access_tokens: dict[str, str] = Field(exclude=True, repr=False)
+    version: int = 1
+    stop_requested: bool = Field(default=False, exclude=True)
+    requested_mode: HumanChatMode | None = Field(default=None, exclude=True)
+    pause_reason: str | None = None
+    error: str | None = None
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+class HumanChatParticipant(APIModel):
+    side: Literal["a", "b"]
+    agent_id: str
+    agent_name: str
+    role: str
+
+
+class HumanChatView(APIModel):
+    id: str
+    goal: str
+    state: HumanChatState
+    max_turns: int | None = None
+    run_policy: HumanChatRunPolicy
+    mode: HumanChatMode
+    version: int
+    viewer: HumanChatParticipant
+    other: HumanChatParticipant
+    waiting_for_agent_id: str | None = None
+    can_act: bool = False
+    can_start: bool = False
+    can_stop: bool = False
+    can_send_direct: bool = False
+    can_switch_to_approval: bool = False
+    pause_reason: str | None = None
+    context: EmployeeChatContext
+    pending_draft: HumanChatDraft | None = None
+    messages: list[HumanChatMessage] = Field(default_factory=list)
+    a2a_turns: list[EmployeeChatTurn] = Field(default_factory=list)
+    audit: list[HumanChatAuditEvent] = Field(default_factory=list)
+    error: str | None = None
+
+
+class HumanChatCreated(APIModel):
+    id: str
+    mode: HumanChatMode
+    state: HumanChatState
+    participant_a_url: str
+    participant_b_url: str
+
+
+class HumanChatApprovalRequest(APIModel):
+    message: str = Field(min_length=1, max_length=500)
+    expected_version: int = Field(ge=1)
+
+
+class HumanChatRejectionRequest(APIModel):
+    reason: str = Field(default="对方暂不继续这次 Agent 沟通", max_length=200)
+    expected_version: int = Field(ge=1)
+
+
+class HumanChatStopRequest(APIModel):
+    reason: str = Field(default="本人停止 Agent 自动接管", max_length=200)
+
+
+class HumanChatStartRequest(APIModel):
+    reason: str = Field(default="本人授权 Agent 自动接管", max_length=200)
+
+
+class HumanChatSwitchModeRequest(APIModel):
+    mode: HumanChatMode
+    reason: str = Field(default="用户切换沟通控制模式", max_length=200)
+
+
+class HumanChatDirectMessageRequest(APIModel):
+    message: str = Field(min_length=1, max_length=1000)

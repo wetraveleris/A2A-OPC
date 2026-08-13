@@ -223,7 +223,7 @@
       bottom: 22px;
       height: 66px;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       color: inherit;
     }
     .tab {
@@ -389,6 +389,132 @@
     .moment-time { color: var(--muted); font-size: 11px; }
     .moment p { margin: 7px 0 0; line-height: 1.55; }
 
+    .internet .scroll { padding-top: 16px; }
+    .internet-route {
+      min-height: 138px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
+      align-items: center;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .internet-node { min-width: 0; }
+    .internet-node.right { text-align: right; }
+    .internet-node-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .internet-node strong { display: block; font-size: 15px; line-height: 1.35; }
+    .internet-node small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+    .internet-hop { position: relative; height: 1px; background: #aeb0a8; }
+    .internet-hop::after { content: ""; position: absolute; top: -3px; right: 0; width: 7px; height: 7px; border-top: 1px solid #6f726a; border-right: 1px solid #6f726a; transform: rotate(45deg); }
+    .internet.running .internet-hop::before {
+      content: "";
+      position: absolute;
+      top: -3px;
+      left: 0;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #718238;
+      animation: internet-hop 1.35s cubic-bezier(.16,1,.3,1) infinite;
+    }
+    @keyframes internet-hop { from { transform: translateX(0); opacity: .35; } 70% { opacity: 1; } to { transform: translateX(39px); opacity: 0; } }
+    .internet-form { padding: 22px 0; border-bottom: 1px solid var(--line); }
+    .internet-form label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 650; }
+    .internet-form textarea {
+      display: block;
+      width: 100%;
+      min-height: 112px;
+      padding: 13px;
+      resize: vertical;
+      border: 1px solid #cfd0ca;
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .internet-form-help { margin: 8px 0 15px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .internet-form .primary { width: 100%; }
+    .control-mode { margin: 18px 0; padding: 16px 0; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .control-mode > legend { padding: 0; margin-bottom: 10px; font-size: 12px; font-weight: 700; }
+    .control-options { display: grid; gap: 7px; }
+    .control-option { display: grid !important; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: start; margin: 0 !important; padding: 12px; border: 1px solid #d0d1ca; border-radius: 7px; background: var(--surface); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+    .control-option:active { transform: translateY(1px); }
+    .control-option:has(input:checked) { border-color: #82964d; background: #f1f4e7; }
+    .control-option input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: #657b2e; }
+    .control-option strong { display: block; font-size: 12px; }
+    .control-option small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .control-option b { padding: 4px 6px; border-radius: 4px; background: #e5e6df; color: #62655d; font-size: 8px; text-transform: uppercase; white-space: nowrap; }
+    .control-option:has(input:checked) b { background: #dce7bb; color: #526528; }
+    .internet-mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      margin: 0 0 18px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #eaebe5;
+    }
+    .internet-mode button {
+      min-height: 34px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .internet-mode button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(24,25,22,.08); }
+    .internet-mode button:active, .debug-turn summary:active { transform: translateY(1px); }
+    .employee-chat { display: none; }
+    .employee-chat.active { display: block; }
+    .employee-route { min-height: 104px; }
+    .chat-timeline { padding: 20px 0 5px; border-bottom: 1px solid var(--line); }
+    .chat-message { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; margin-bottom: 16px; animation: turn-in .3s cubic-bezier(.16,1,.3,1) both; animation-delay: calc(var(--turn) * 50ms); }
+    @keyframes turn-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .chat-avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--dark); color: var(--white); font-size: 11px; font-weight: 750; }
+    .chat-message.remote .chat-avatar { background: #6e852f; }
+    .chat-copy strong { display: block; margin-bottom: 4px; font-size: 11px; }
+    .chat-copy p { margin: 0; color: #393b36; font-size: 13px; line-height: 1.55; }
+    .chat-task { display: block; margin-top: 6px; color: var(--muted); font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 9px; overflow-wrap: anywhere; }
+    .context-summary { padding: 18px 0; border-bottom: 1px solid var(--line); }
+    .context-summary h2, .debug-timeline > h2 { margin: 0 0 10px; font-size: 14px; }
+    .context-summary ul { margin: 0; padding-left: 18px; color: #4d5048; font-size: 12px; line-height: 1.65; }
+    .debug-timeline { padding: 18px 0; }
+    .debug-turn { border-top: 1px solid var(--line); }
+    .debug-turn:last-child { border-bottom: 1px solid var(--line); }
+    .debug-turn summary { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 12px 0; cursor: pointer; list-style: none; font-size: 11px; }
+    .debug-turn summary::-webkit-details-marker { display: none; }
+    .debug-turn summary span { color: var(--muted); }
+    .debug-turn summary code { font-size: 9px; overflow: hidden; text-overflow: ellipsis; }
+    .debug-turn summary b { color: #596a2d; font-size: 9px; }
+    .debug-payload { margin: 0 0 14px; padding: 11px; max-height: 230px; overflow: auto; border: 1px solid #d4d5cf; border-radius: 5px; background: #ecece7; color: #30322d; font: 9px/1.55 ui-monospace, "SFMono-Regular", Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .chat-loading { display: none; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .employee-chat.running .chat-loading { display: block; }
+    .loading-line { height: 11px; margin: 0 0 9px; border-radius: 3px; background: linear-gradient(90deg, #e1e2dc 20%, #f5f5f0 50%, #e1e2dc 80%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .loading-line:nth-child(2) { width: 76%; }
+    @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+    .room-links { padding: 18px 0; border-bottom: 1px solid var(--line); }
+    .room-links[hidden] { display: none; }
+    .room-links h2 { margin: 0 0 5px; font-size: 16px; }
+    .room-links > p { margin: 0 0 14px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .room-link { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 8px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+    .room-link strong { display: block; font-size: 12px; }
+    .room-link code { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .room-link a { display: grid; place-items: center; min-height: 34px; border: 1px solid #b9bcb2; border-radius: 5px; color: var(--ink); font-size: 11px; font-weight: 700; text-decoration: none; }
+    .internet-result { padding: 20px 0 8px; }
+    .internet-result[hidden] { display: none; }
+    .internet-result-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 15px; }
+    .internet-result-head h2 { margin: 0; font-size: 18px; }
+    .internet-status { padding: 5px 8px; border: 1px solid #b8c68f; border-radius: 5px; color: #596a2d; font-size: 10px; font-weight: 750; white-space: nowrap; }
+    .internet-response { margin: 0; padding: 15px 0 18px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .internet-proof { margin: 0; border-top: 1px solid var(--line); }
+    .internet-proof div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .internet-proof dt { color: var(--muted); font-size: 10px; }
+    .internet-proof dd { margin: 0; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+    .internet-error { margin: 14px 0 0; color: #a7453d; font-size: 12px; line-height: 1.55; }
+    .internet-error:empty { display: none; }
+
     .onboarding { background: var(--paper); }
     .onboard-content { flex: 1; padding: 82px 24px 26px; display: flex; flex-direction: column; min-height: 0; }
     .step { font-size: 11px; color: var(--muted); font-weight: 750; text-transform: uppercase; }
@@ -513,6 +639,7 @@
           <nav class="tabbar" aria-label="主导航">
             <button class="tab active" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
             <button class="tab" data-go="connect"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
+            <button class="tab" data-go="internet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9S14.3 18.5 12 21M12 3C9.7 5.5 8.5 8.5 8.5 12s1.2 6.5 3.5 9"/></svg>公网</button>
             <button class="tab" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
           </nav>
 
@@ -614,6 +741,126 @@
           </aside>
         </main>
 
+        <main class="view internet" id="internetView" data-view="internet">
+          <header class="page-head">
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button class="back" data-go="discover" aria-label="返回发现页"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+              <div><h1>公网 A2A</h1><p>向独立运行的远端 Agent 发出任务</p></div>
+            </div>
+            <span class="eyebrow" id="internetProtocol">A2A</span>
+          </header>
+          <div class="scroll">
+            <nav class="internet-mode" aria-label="公网 A2A 模式">
+              <button class="active" id="internetSingleMode" type="button">第三方任务</button>
+              <button id="internetChatMode" type="button">双 Agent 调试</button>
+            </nav>
+            <div id="internetSinglePanel">
+            <section class="internet-route" aria-label="Agent 通信路径">
+              <div class="internet-node">
+                <span class="internet-node-label">本机</span>
+                <strong>陈默的 OPC Agent</strong>
+                <small>OPC Link</small>
+              </div>
+              <div class="internet-hop" aria-hidden="true"></div>
+              <div class="internet-node right">
+                <span class="internet-node-label">互联网</span>
+                <strong id="internetTargetName">正在发现 Agent</strong>
+                <small id="internetTargetSkill">读取 Agent Card</small>
+              </div>
+            </section>
+            <form class="internet-form" id="internetForm">
+              <label for="internetPrompt">交给远端 Agent 的需求</label>
+              <textarea id="internetPrompt" maxlength="500">请为个人网站 Agent 与公网 Agent 的首次协作，给出三个简洁、可执行的下一步。</textarea>
+              <p class="internet-form-help">请求将通过远端公开 Agent Card 发现 JSON-RPC 地址，再以 A2A Task 发出。</p>
+              <button class="primary" id="internetSendButton" type="submit">发送 A2A 请求</button>
+              <p class="internet-error" id="internetError" role="alert"></p>
+            </form>
+            <section class="internet-result" id="internetResult" aria-live="polite" hidden>
+              <div class="internet-result-head">
+                <h2>远端 Agent 已响应</h2>
+                <span class="internet-status" id="internetTaskState">COMPLETED</span>
+              </div>
+              <p class="internet-response" id="internetResponse"></p>
+              <dl class="internet-proof">
+                <div><dt>远端地址</dt><dd id="internetTargetUrl"></dd></div>
+                <div><dt>技能</dt><dd id="internetSkill"></dd></div>
+                <div><dt>Task ID</dt><dd id="internetTaskId"></dd></div>
+              </dl>
+              <p class="disclosure">这里显示的是远端 Agent 返回的真实 A2A Artifact。公网服务可能暂时离线，失败不会转为本地模拟。</p>
+            </section>
+            </div>
+            <div class="employee-chat" id="employeeChatPanel">
+              <section class="internet-route employee-route" aria-label="双 Agent 通信路径">
+                <div class="internet-node">
+                  <span class="internet-node-label">Agent A</span>
+                  <strong>陈默 Agent</strong>
+                  <small id="employeeAgentAUrl">/a2a/opc-builder</small>
+                </div>
+                <div class="internet-hop" aria-hidden="true"></div>
+                <div class="internet-node right">
+                  <span class="internet-node-label">Agent B</span>
+                  <strong>沈知野 Agent</strong>
+                  <small id="employeeAgentBUrl">/a2a/shen-zhiye</small>
+                </div>
+              </section>
+              <form class="internet-form" id="employeeChatForm">
+                <label for="employeeGoal">两位 Agent 要解决的需求</label>
+                <textarea id="employeeGoal" maxlength="500">一起验证个人网站 Agent 能否自动找到合作机会，并形成一个两周内可以执行的下一步。</textarea>
+                <fieldset class="control-mode">
+                  <legend>沟通控制权</legend>
+                  <div class="control-options">
+                    <label class="control-option">
+                      <input type="radio" name="chatMode" value="HUMAN_APPROVAL" checked>
+                      <span><strong>逐条人工批准</strong><small>每次发送前由对应用户检查、修改或拒绝。</small></span>
+                      <b>可编辑</b>
+                    </label>
+                    <label class="control-option">
+                      <input type="radio" name="chatMode" value="AGENT_TAKEOVER">
+                      <span><strong>Agent 托管</strong><small>先打开沟通窗口，用户确认启动后模型才会自动回复。</small></span>
+                      <b>自动</b>
+                    </label>
+                    <label class="control-option">
+                      <input type="radio" name="chatMode" value="HUMAN_DIRECT">
+                      <span><strong>人工直聊</strong><small>双方本人直接发送消息，Agent 暂不介入。</small></span>
+                      <b>本人</b>
+                    </label>
+                  </div>
+                </fieldset>
+                <p class="internet-form-help" id="employeeModeHelp">创建两个独立页面。每轮草稿经所属用户批准后才会发送。</p>
+                <button class="primary" id="employeeChatButton" type="submit">创建人工审核会话</button>
+                <p class="internet-error" id="employeeChatError" role="alert"></p>
+              </form>
+              <section class="room-links" id="humanRoomLinks" hidden>
+                <h2>两个用户入口已创建</h2>
+                <p id="humanRoomHint">分别在两个窗口打开。每一方只能批准自己 Agent 的草稿。</p>
+                <div class="room-link">
+                  <div><strong>用户 A · 陈默</strong><code id="humanRoomAUrl"></code></div>
+                  <a id="humanRoomAOpen" target="_blank" rel="noopener">打开 A</a>
+                </div>
+                <div class="room-link">
+                  <div><strong>用户 B · 沈知野</strong><code id="humanRoomBUrl"></code></div>
+                  <a id="humanRoomBOpen" target="_blank" rel="noopener">打开 B</a>
+                </div>
+              </section>
+              <div class="chat-loading" id="employeeChatLoading" aria-live="polite">
+                <div class="loading-line"></div><div class="loading-line"></div><div class="loading-line"></div>
+              </div>
+              <section id="employeeChatResult" hidden>
+                <div class="chat-timeline" id="employeeChatTimeline"></div>
+                <section class="context-summary">
+                  <h2>共享上下文结果</h2>
+                  <ul id="employeeContextSummary"></ul>
+                </section>
+                <section class="debug-timeline">
+                  <h2>协议调试证据</h2>
+                  <div id="employeeDebugTimeline"></div>
+                </section>
+                <p class="disclosure">每轮均通过 Agent Card 发现后调用 JSON-RPC message/send；展开可检查请求、响应和上下文变化。</p>
+              </section>
+            </div>
+          </div>
+        </main>
+
         <main class="view onboarding" id="onboardingView" data-view="onboarding">
           <section class="onboard-content">
             <span class="step">建立你的 OPC Agent · 1 / 3</span>
@@ -692,6 +939,8 @@
     let currentLiveConversation = null;
     let screeningCandidate = null;
     let scheduleCandidate = null;
+    let internetTarget = null;
+    let internetTargetPromise = null;
     let screeningRunning = false;
     const $ = (id) => document.getElementById(id);
     const video = $("candidateVideo");
@@ -841,7 +1090,7 @@
       currentLiveConversation = null;
       $("scheduleTitle").textContent = "Agent 正在沟通";
       $("scheduleStatus").textContent = `我的 Agent 正在联系 ${candidate.name}`;
-      $("scheduleMessage").textContent = "消息由 DeepSeek 实时生成，并通过 A2A 逐段传输。";
+      $("scheduleMessage").textContent = "消息由当前配置的模型实时生成，并通过 A2A 逐段传输。";
       $("scheduleTurns").replaceChildren();
       $("scheduleConfirmButton").disabled = true;
       $("scheduleConfirmButton").textContent = "等待 Agent 确认";
@@ -975,6 +1224,257 @@
       }
     }
 
+    async function loadInternetTarget() {
+      if (internetTarget) return internetTarget;
+      if (internetTargetPromise) return internetTargetPromise;
+      internetTargetPromise = (async () => {
+        const response = await fetch("/api/internet-a2a/targets");
+        if (!response.ok) throw new Error("公网 Agent 发现失败");
+        const targets = await response.json();
+        if (!targets.length) throw new Error("当前没有可用的公网 Agent");
+        internetTarget = targets[0];
+        $("internetTargetName").textContent = internetTarget.name;
+        $("internetTargetSkill").textContent = internetTarget.skillName;
+        $("internetProtocol").textContent = `A2A ${internetTarget.protocolVersion}`;
+        if (!$("internetPrompt").value.trim()) {
+          $("internetPrompt").value = internetTarget.defaultPrompt;
+        }
+        return internetTarget;
+      })();
+      try {
+        return await internetTargetPromise;
+      } finally {
+        internetTargetPromise = null;
+      }
+    }
+
+    async function startInternetA2A(event) {
+      event.preventDefault();
+      const prompt = $("internetPrompt").value.trim();
+      if (!prompt) {
+        $("internetError").textContent = "先写下一个明确需求。";
+        $("internetPrompt").focus();
+        return;
+      }
+      const button = $("internetSendButton");
+      $("internetError").textContent = "";
+      $("internetResult").hidden = true;
+      $("internetView").classList.add("running");
+      button.disabled = true;
+      button.textContent = "正在跨互联网沟通";
+      try {
+        const target = await loadInternetTarget();
+        const response = await fetch("/api/internet-a2a/demo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetId: target.id, prompt })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || `公网 Agent 请求失败 (${response.status})`);
+        }
+        const record = await response.json();
+        $("internetResponse").textContent = record.responseText;
+        $("internetTaskState").textContent = record.taskState.replace("TASK_STATE_", "");
+        $("internetTargetUrl").textContent = record.targetUrl;
+        $("internetSkill").textContent = `${record.skillName} · ${record.skillId}`;
+        $("internetTaskId").textContent = record.taskId;
+        $("internetResult").hidden = false;
+        $("internetResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (error) {
+        $("internetError").textContent = error.message || "公网 Agent 暂时不可用，请稍后重试。";
+      } finally {
+        $("internetView").classList.remove("running");
+        button.disabled = false;
+        button.textContent = "发送 A2A 请求";
+      }
+    }
+
+    function setInternetMode(mode) {
+      const isChat = mode === "chat";
+      $("internetSingleMode").classList.toggle("active", !isChat);
+      $("internetChatMode").classList.toggle("active", isChat);
+      $("internetSinglePanel").hidden = isChat;
+      $("employeeChatPanel").classList.toggle("active", isChat);
+    }
+
+    function renderEmployeeChat(record) {
+      const names = { "opc-builder": "陈默 Agent", "shen-zhiye": "沈知野 Agent" };
+      const timeline = $("employeeChatTimeline");
+      timeline.replaceChildren(...record.turns.map(turn => {
+        const article = document.createElement("article");
+        const speakerId = turn.response.speakerAgentId;
+        article.className = `chat-message ${speakerId === "opc-builder" ? "" : "remote"}`;
+        article.style.setProperty("--turn", turn.turn);
+        const avatar = document.createElement("span");
+        avatar.className = "chat-avatar";
+        avatar.textContent = speakerId === "opc-builder" ? "陈" : "沈";
+        const copy = document.createElement("div");
+        copy.className = "chat-copy";
+        const name = document.createElement("strong");
+        name.textContent = `${names[speakerId] || speakerId} · 第 ${turn.turn} 轮`;
+        const reply = document.createElement("p");
+        reply.textContent = turn.response.reply;
+        const task = document.createElement("span");
+        task.className = "chat-task";
+        task.textContent = `${turn.taskId} · ${turn.taskState.replace("TASK_STATE_", "")}`;
+        copy.append(name, reply, task);
+        article.append(avatar, copy);
+        return article;
+      }));
+
+      const contextItems = [
+        ...record.context.decisions.map(item => `决定：${item}`),
+        ...record.context.openQuestions.map(item => `待确认：${item}`)
+      ];
+      $("employeeContextSummary").replaceChildren(...contextItems.map(item => {
+        const row = document.createElement("li");
+        row.textContent = item;
+        return row;
+      }));
+
+      $("employeeDebugTimeline").replaceChildren(...record.turns.map(turn => {
+        const details = document.createElement("details");
+        details.className = "debug-turn";
+        const summary = document.createElement("summary");
+        const label = document.createElement("span");
+        label.textContent = `TURN ${turn.turn}`;
+        const task = document.createElement("code");
+        task.textContent = turn.taskId;
+        const state = document.createElement("b");
+        state.textContent = "COMPLETED";
+        summary.append(label, task, state);
+        const payload = document.createElement("pre");
+        payload.className = "debug-payload";
+        payload.textContent = [
+          `Agent Card: ${turn.agentCardUrl}`,
+          `JSON-RPC: ${turn.jsonrpcMethod} ${turn.jsonrpcUrl}`,
+          "",
+          "REQUEST",
+          JSON.stringify(turn.request, null, 2),
+          "",
+          "RESPONSE",
+          JSON.stringify(turn.response, null, 2),
+          "",
+          "CONTEXT AFTER",
+          JSON.stringify(turn.contextAfter, null, 2)
+        ].join("\n");
+        details.append(summary, payload);
+        return details;
+      }));
+
+      const firstTurn = record.turns[0];
+      const secondTurn = record.turns[1];
+      if (secondTurn) $("employeeAgentAUrl").textContent = secondTurn.jsonrpcUrl;
+      if (firstTurn) $("employeeAgentBUrl").textContent = firstTurn.jsonrpcUrl;
+      $("employeeChatResult").hidden = false;
+    }
+
+    async function startEmployeeChat(event) {
+      event.preventDefault();
+      const goal = $("employeeGoal").value.trim();
+      if (!goal) {
+        $("employeeChatError").textContent = "先写下两位 Agent 要共同解决的需求。";
+        $("employeeGoal").focus();
+        return;
+      }
+      const panel = $("employeeChatPanel");
+      const button = $("employeeChatButton");
+      $("employeeChatError").textContent = "";
+      $("employeeChatResult").hidden = true;
+      panel.classList.add("running");
+      button.disabled = true;
+      button.textContent = "Agent 正在交替沟通";
+      try {
+        const response = await fetch("/api/employee-chats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromAgentId: "opc-builder",
+            toAgentId: "shen-zhiye",
+            goal,
+            maxTurns: 4
+          })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || `双 Agent 对话失败 (${response.status})`);
+        }
+        renderEmployeeChat(await response.json());
+        $("employeeChatResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (error) {
+        $("employeeChatError").textContent = error.message || "双 Agent 对话暂时无法完成。";
+      } finally {
+        panel.classList.remove("running");
+        button.disabled = false;
+        button.textContent = "开始 4 轮 A2A 对话";
+      }
+    }
+
+    async function createHumanRoom(event) {
+      event.preventDefault();
+      const goal = $("employeeGoal").value.trim();
+      const mode = document.querySelector('input[name="chatMode"]:checked').value;
+      const takeover = mode === "AGENT_TAKEOVER";
+      const direct = mode === "HUMAN_DIRECT";
+      if (!goal) {
+        $("employeeChatError").textContent = "先写下两位用户要共同解决的需求。";
+        $("employeeGoal").focus();
+        return;
+      }
+      const button = $("employeeChatButton");
+      $("employeeChatError").textContent = "";
+      $("humanRoomLinks").hidden = true;
+      button.disabled = true;
+      button.textContent = takeover ? "正在创建托管会话" : direct ? "正在创建人工沟通" : "正在创建人工审核会话";
+      try {
+        const response = await fetch("/api/human-agent-chats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromAgentId: "opc-builder",
+            toAgentId: "shen-zhiye",
+            goal,
+            runPolicy: "CONTINUOUS",
+            mode
+          })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || `会话创建失败 (${response.status})`);
+        }
+        const room = await response.json();
+        const aUrl = new URL(room.participantAUrl, window.location.origin).href;
+        const bUrl = new URL(room.participantBUrl, window.location.origin).href;
+        $("humanRoomAUrl").textContent = aUrl;
+        $("humanRoomBUrl").textContent = bUrl;
+        $("humanRoomAOpen").href = aUrl;
+        $("humanRoomBOpen").href = bUrl;
+        $("humanRoomHint").textContent = takeover
+          ? "分别打开两个沟通窗口。任一用户点击开始托管后，Agent 才会自动往返。"
+          : direct ? "分别打开两个沟通窗口。双方本人可以直接发送消息，并随时交回 Agent。"
+          : "分别在两个窗口打开。每一方只能批准自己 Agent 的草稿。";
+        $("humanRoomLinks").hidden = false;
+        $("humanRoomLinks").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (error) {
+        $("employeeChatError").textContent = error.message || "双用户会话暂时无法创建。";
+      } finally {
+        button.disabled = false;
+        updateChatMode();
+      }
+    }
+
+    function updateChatMode() {
+      const mode = document.querySelector('input[name="chatMode"]:checked').value;
+      const takeover = mode === "AGENT_TAKEOVER";
+      const direct = mode === "HUMAN_DIRECT";
+      $("employeeModeHelp").textContent = takeover
+        ? "先创建两个沟通窗口。进入房间确认目标并点击开始后，模型才会介入。"
+        : direct ? "创建长期人工沟通窗口，双方可在房间内随时切换人工审核或 Agent 托管。"
+        : "创建两个独立页面。每轮草稿经所属用户批准后才会发送。";
+      $("employeeChatButton").textContent = takeover ? "创建 Agent 托管会话" : direct ? "创建人工直聊会话" : "创建人工审核会话";
+    }
+
     function go(viewName) {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       toast.classList.remove("show");
@@ -989,6 +1489,9 @@
       if (viewName === "discover") video.play().catch(() => {});
       if (viewName === "profile") renderProfile();
       if (viewName === "connect") screeningRunning ? setScreeningLoading(screeningCandidate) : renderConnect();
+      if (viewName === "internet") loadInternetTarget().catch(error => {
+        $("internetError").textContent = error.message || "公网 Agent 发现失败";
+      });
       if (viewName === "onboarding") $("opcStatement").focus({ preventScroll: true });
       $("phone").scrollTop = 0;
       window.scrollTo(0, 0);
@@ -1104,6 +1607,11 @@
       }
     });
     $("profileAgentButton").addEventListener("click", startAgentScreening);
+    $("internetForm").addEventListener("submit", startInternetA2A);
+    $("internetSingleMode").addEventListener("click", () => setInternetMode("single"));
+    $("internetChatMode").addEventListener("click", () => setInternetMode("chat"));
+    $("employeeChatForm").addEventListener("submit", createHumanRoom);
+    document.querySelectorAll('input[name="chatMode"]').forEach(input => input.addEventListener("change", updateChatMode));
     $("continueButton").addEventListener("click", () => {
       const value = $("opcStatement").value.trim();
       if (!value) { showToast("先用一句话说说你在做什么"); $("opcStatement").focus(); return; }

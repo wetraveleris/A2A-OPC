@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f5f0">
+  <title>OPC Link - Agent 会话室</title>
+  <style>
+    :root {
+      --paper: #f5f5f0;
+      --surface: #fbfbf8;
+      --ink: #181916;
+      --muted: #72756d;
+      --line: #d9dad3;
+      --accent: #6e852f;
+      --accent-soft: #e6edcf;
+      --danger: #a7453d;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font); letter-spacing: 0; }
+    body { min-height: 100dvh; }
+    button, textarea { font: inherit; letter-spacing: 0; }
+    button { cursor: pointer; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #c8d99d; outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    .topbar { position: sticky; top: 0; z-index: 5; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 28px; border-bottom: 1px solid var(--line); background: rgba(245,245,240,.96); backdrop-filter: blur(12px); }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 780; }
+    .brand-mark { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
+    .connection { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+    .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #a4a69e; }
+    .connection.live .connection-dot { background: var(--accent); animation: breathe 1.8s ease-in-out infinite; }
+    @keyframes breathe { 50% { opacity: .35; transform: scale(.82); } }
+
+    .shell { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: calc(100dvh - 64px); }
+    .main { min-width: 0; display: flex; flex-direction: column; }
+    .room-head { padding: 36px clamp(24px, 5vw, 72px) 24px; border-bottom: 1px solid var(--line); }
+    .room-meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .identity { display: flex; align-items: center; gap: 10px; }
+    .avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--ink); color: var(--surface); font-size: 14px; font-weight: 750; }
+    .identity strong { display: block; font-size: 14px; }
+    .identity span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .state { padding: 6px 9px; border: 1px solid #bbc69f; border-radius: 5px; color: #596a2d; font: 700 10px var(--mono); white-space: nowrap; }
+    .room-head h1 { max-width: 760px; margin: 0; font-size: 24px; line-height: 1.35; font-weight: 680; }
+    .room-head > p { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+    .mode-banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; margin-top: 20px; padding: 14px 0 0; border-top: 1px solid var(--line); }
+    .mode-banner strong { display: block; font-size: 12px; }
+    .mode-banner p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .mode-indicator { display: flex; align-items: center; gap: 7px; color: var(--accent); font: 700 9px var(--mono); white-space: nowrap; }
+    .mode-indicator::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .mode-indicator.running::before { animation: breathe 1.6s ease-in-out infinite; }
+    .mode-controls { display: inline-grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; margin-top: 14px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: #edeee8; }
+    .mode-control { min-height: 32px; padding: 0 11px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .mode-control.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(24,25,22,.08); }
+    .mode-control:disabled { cursor: wait; opacity: .5; }
+
+    .timeline { flex: 1; width: min(820px, 100%); margin: 0 auto; padding: 30px clamp(24px, 5vw, 64px) 220px; }
+    .empty { padding: 52px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .empty strong { display: block; font-size: 16px; }
+    .empty p { max-width: 480px; margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .message { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); }
+    .message.latest { animation: enter .3s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .message:last-child { border-bottom: 1px solid var(--line); }
+    .message .avatar { width: 32px; height: 32px; font-size: 11px; }
+    .message.other .avatar { background: var(--accent); }
+    .message-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .message-head strong { font-size: 12px; }
+    .message-head span { color: var(--muted); font: 9px var(--mono); }
+    .message p { margin: 7px 0 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .edited { display: inline-block; margin-top: 8px; color: var(--accent); font-size: 10px; }
+    .history-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0 16px; color: var(--muted); font-size: 11px; }
+    .history-button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c8c9c2; border-radius: 4px; background: transparent; color: var(--ink); font-size: 10px; font-weight: 700; }
+
+    .composer-wrap { position: fixed; z-index: 4; left: 0; right: 340px; bottom: 0; padding: 16px clamp(24px, 5vw, 72px) 22px; border-top: 1px solid rgba(217,218,211,.8); background: rgba(245,245,240,.96); backdrop-filter: blur(12px); }
+    .composer { width: min(760px, 100%); margin: 0 auto; padding: 14px; border: 1px solid #c9cac3; border-radius: 7px; background: var(--surface); box-shadow: 0 12px 28px rgba(24,25,22,.08); }
+    .composer-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+    .composer-label strong { font-size: 12px; }
+    .composer-label span { color: var(--muted); font: 9px var(--mono); }
+    .composer textarea { display: block; width: 100%; min-height: 86px; padding: 11px; resize: vertical; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: 14px; line-height: 1.55; }
+    .composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .button { min-height: 38px; padding: 0 15px; border-radius: 5px; font-size: 12px; font-weight: 720; }
+    .button.primary { border: 1px solid var(--ink); background: var(--ink); color: var(--surface); }
+    .button.secondary { border: 1px solid #c8c9c2; background: transparent; color: var(--danger); }
+    .button:disabled { cursor: wait; opacity: .5; transform: none; }
+    .waiting { width: min(760px, 100%); margin: 0 auto; padding: 16px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+    .waiting strong { display: block; font-size: 13px; }
+    .waiting p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .waiting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .stop-button { flex: 0 0 auto; min-height: 36px; padding: 0 13px; border: 1px solid #c9a9a5; border-radius: 5px; background: transparent; color: var(--danger); font-size: 11px; font-weight: 700; }
+    .takeover-actions { display: flex; align-items: center; gap: 8px; }
+    .direct-composer textarea { min-height: 64px; }
+    .error { margin: 8px 0 0; color: var(--danger); font-size: 11px; }
+
+    .rail { min-width: 0; padding: 28px 24px 70px; border-left: 1px solid var(--line); background: #edeee8; overflow-y: auto; }
+    .rail section { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid #d1d2cb; }
+    .rail h2 { margin: 0 0 12px; font-size: 12px; }
+    .context-group { margin-top: 14px; }
+    .context-group strong { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 600; }
+    .context-group ul { margin: 0; padding-left: 17px; font-size: 11px; line-height: 1.6; }
+    .context-group li + li { margin-top: 4px; }
+    details { border-top: 1px solid #d1d2cb; }
+    details:last-child { border-bottom: 1px solid #d1d2cb; }
+    summary { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 8px; padding: 11px 0; cursor: pointer; list-style: none; font-size: 10px; }
+    summary::-webkit-details-marker { display: none; }
+    summary span { color: var(--muted); }
+    summary code { overflow: hidden; font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+    pre { max-height: 260px; margin: 0 0 12px; padding: 10px; overflow: auto; border: 1px solid #d0d1ca; border-radius: 5px; background: #f5f5f0; font: 9px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .audit-item { padding: 9px 0; border-top: 1px solid #d1d2cb; }
+    .audit-item code { display: block; color: var(--accent); font: 9px var(--mono); }
+    .audit-item p { margin: 4px 0 0; font-size: 10px; line-height: 1.45; }
+
+    .fatal { width: min(520px, calc(100% - 40px)); margin: 90px auto; padding: 24px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .fatal h1 { margin: 0; font-size: 22px; }
+    .fatal p { margin: 10px 0 0; color: var(--muted); line-height: 1.6; }
+
+    @media (max-width: 840px) {
+      .topbar { padding: 0 18px; }
+      .shell { display: block; }
+      .room-head { padding: 24px 20px 20px; }
+      .room-head h1 { font-size: 20px; }
+      .timeline { padding: 22px 20px; }
+      .composer-wrap { position: static; padding: 14px 14px calc(16px + env(safe-area-inset-bottom)); }
+      .rail { padding: 24px 20px 70px; border-top: 1px solid var(--line); border-left: 0; }
+      .room-meta { align-items: flex-start; }
+      .mode-controls { display: grid; width: 100%; }
+      .waiting-row { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"></span>OPC LINK · AGENT ROOM</div>
+    <div class="connection" id="connection"><span class="connection-dot"></span><span id="connectionText">正在连接</span></div>
+  </header>
+
+  <div id="fatal" class="fatal" hidden><h1>无法进入会话</h1><p id="fatalMessage"></p></div>
+  <div class="shell" id="app" hidden>
+    <main class="main">
+      <header class="room-head">
+        <div class="room-meta">
+          <div class="identity"><span class="avatar" id="viewerAvatar"></span><div><strong id="viewerName"></strong><span id="viewerRole"></span></div></div>
+          <span class="state" id="roomState"></span>
+        </div>
+        <h1 id="roomGoal"></h1>
+        <p id="roomRelation"></p>
+        <section class="mode-banner"><div><strong id="modeTitle"></strong><p id="modeDescription"></p><div class="mode-controls" id="modeControls"><button class="mode-control" data-mode="AGENT_TAKEOVER" type="button">Agent 托管</button><button class="mode-control" data-mode="HUMAN_APPROVAL" type="button">人工审核</button><button class="mode-control" data-mode="HUMAN_DIRECT" type="button">人工直聊</button></div><p class="error" id="modeError" role="alert"></p></div><span class="mode-indicator" id="modeIndicator"></span></section>
+      </header>
+      <section class="timeline" id="timeline" aria-live="polite"></section>
+      <div class="composer-wrap">
+        <form class="composer" id="composer" hidden>
+          <div class="composer-label"><strong>你的 Agent 草稿</strong><span id="draftTask"></span></div>
+          <textarea id="draftText" maxlength="500" aria-label="Agent 草稿"></textarea>
+          <div class="composer-actions"><button class="button secondary" id="rejectButton" type="button">拒绝会话</button><button class="button primary" id="approveButton" type="submit">批准并发送</button></div>
+          <p class="error" id="actionError" role="alert"></p>
+        </form>
+        <form class="composer direct-composer" id="directComposer" hidden>
+          <div class="composer-label"><strong>本人直接发送</strong><span>不调用模型</span></div>
+          <textarea id="directText" maxlength="1000" aria-label="人工消息" placeholder="输入你要直接告诉对方用户的内容"></textarea>
+          <div class="composer-actions"><button class="button primary" id="directSendButton" type="submit">发送消息</button></div>
+          <p class="error" id="directError" role="alert"></p>
+        </form>
+        <section class="waiting" id="waiting"><div class="waiting-row"><div><strong id="waitingTitle"></strong><p id="waitingText"></p></div><div class="takeover-actions"><button class="button primary" id="startButton" type="button" hidden>开始 Agent 托管</button><button class="stop-button" id="stopButton" type="button" hidden>停止接管</button></div></div><p class="error" id="stopError" role="alert"></p></section>
+      </div>
+    </main>
+    <aside class="rail">
+      <section><h2>共享上下文</h2><div id="context"></div></section>
+      <section><h2>A2A 协议证据</h2><div id="evidence"></div></section>
+      <section><h2>控制与审计</h2><div id="audit"></div></section>
+    </aside>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const roomId = params.get("room");
+    const token = params.get("token");
+    const $ = id => document.getElementById(id);
+    let current = null;
+    let events = null;
+    let acting = false;
+    let startPending = false;
+    let showAllMessages = false;
+    const MESSAGE_WINDOW = 30;
+
+    function endpoint(suffix = "") {
+      return `/api/human-agent-chats/${encodeURIComponent(roomId)}${suffix}?token=${encodeURIComponent(token)}`;
+    }
+
+    function stateLabel(state) {
+      return ({
+        WAITING_OWNER_A: "WAITING A",
+        WAITING_OWNER_B: "WAITING B",
+        AGENT_READY: "READY",
+        AGENT_RUNNING: "AGENT RUNNING",
+        STOPPING: "STOPPING",
+        STOPPED: "STOPPED",
+        HUMAN_DIRECT: "HUMAN DIRECT",
+        COMPLETED: "COMPLETED",
+        REJECTED: "REJECTED",
+        FAILED: "FAILED"
+      })[state] || state;
+    }
+
+    function isTerminal(state) {
+      return ["COMPLETED", "REJECTED", "FAILED"].includes(state);
+    }
+
+    function makeMessage(message, isLatest = false) {
+      const article = document.createElement("article");
+      const mine = message.speakerAgentId === current.viewer.agentId;
+      article.className = `message ${mine ? "mine" : "other"}${isLatest ? " latest" : ""}`;
+      const avatar = document.createElement("span");
+      avatar.className = "avatar";
+      const profile = mine ? current.viewer : current.other;
+      avatar.textContent = profile.agentName.slice(0, 1);
+      const body = document.createElement("div");
+      const head = document.createElement("div");
+      head.className = "message-head";
+      const name = document.createElement("strong");
+      name.textContent = message.source === "HUMAN_DIRECT" ? `${profile.agentName}本人` : `${profile.agentName}的 Agent`;
+      const turn = document.createElement("span");
+      turn.textContent = message.turn === 0 ? "INITIAL" : `TURN ${message.turn}`;
+      head.append(name, turn);
+      const text = document.createElement("p");
+      text.textContent = message.text;
+      body.append(head, text);
+      if (message.source === "HUMAN_DIRECT" || !message.humanApproved || message.humanEdited) {
+        const edited = document.createElement("span");
+        edited.className = "edited";
+        edited.textContent = message.source === "HUMAN_DIRECT" ? "人工直接发送" : message.humanApproved ? "本人修改后批准" : "Agent 自动发送";
+        body.append(edited);
+      }
+      article.append(avatar, body);
+      return article;
+    }
+
+    function renderTimeline() {
+      if (!current.messages.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        const title = document.createElement("strong");
+        const takeover = current.mode === "AGENT_TAKEOVER";
+        const direct = current.mode === "HUMAN_DIRECT";
+        title.textContent = takeover
+          ? current.state === "AGENT_READY" ? "沟通窗口已建立" : "Agent 正在启动"
+          : direct ? "开始人工沟通" : current.canAct ? "先审核你的初始需求" : "等待用户 A 发出需求";
+        const copy = document.createElement("p");
+        copy.textContent = takeover
+          ? current.state === "AGENT_READY"
+            ? "目前没有调用模型。确认目标后，点击下方按钮才会授权 Agent 开始自动沟通。"
+            : "初始需求将由本地模型自动发送。第一轮 A2A Task 完成后，会话和协议记录会实时出现在这里。"
+          : direct ? "双方用户直接发送消息，Agent 不会自动回复。随时可以重新交给 Agent 托管。"
+          : current.canAct ? "你可以修改措辞。批准后才会通过 A2A 发给对方 Agent。" : "初始需求尚未批准，因此你暂时看不到草稿内容。";
+        empty.append(title, copy);
+        $("timeline").replaceChildren(empty);
+        return;
+      }
+      const visibleMessages = showAllMessages
+        ? current.messages
+        : current.messages.slice(-MESSAGE_WINDOW);
+      const nodes = [];
+      if (visibleMessages.length < current.messages.length) {
+        const notice = document.createElement("div");
+        notice.className = "history-notice";
+        const label = document.createElement("span");
+        label.textContent = `为保持页面流畅，已折叠更早的 ${current.messages.length - visibleMessages.length} 条消息`;
+        const button = document.createElement("button");
+        button.className = "history-button";
+        button.type = "button";
+        button.textContent = "查看全部";
+        button.addEventListener("click", () => { showAllMessages = true; renderTimeline(); });
+        notice.append(label, button);
+        nodes.push(notice);
+      }
+      visibleMessages.forEach((message, index) => {
+        nodes.push(makeMessage(message, index === visibleMessages.length - 1));
+      });
+      $("timeline").replaceChildren(...nodes);
+    }
+
+    function renderContext() {
+      const groups = [
+        ["已知事实", current.context.knownFacts],
+        ["共同决定", current.context.decisions],
+        ["待确认", current.context.openQuestions]
+      ];
+      $("context").replaceChildren(...groups.map(([label, items]) => {
+        const group = document.createElement("div");
+        group.className = "context-group";
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const list = document.createElement("ul");
+        list.replaceChildren(...items.map(item => { const li = document.createElement("li"); li.textContent = item; return li; }));
+        group.append(title, list);
+        return group;
+      }));
+    }
+
+    function renderEvidence() {
+      if (!current.a2ATurns.length) {
+        const empty = document.createElement("div");
+        empty.className = "context-group";
+        empty.textContent = current.mode === "AGENT_TAKEOVER"
+          ? "首个 A2A Task 完成后，请求、响应和 Task ID 会自动记录在这里。"
+          : "对方批准回复后，协议证据才会共享。";
+        $("evidence").replaceChildren(empty);
+        return;
+      }
+      $("evidence").replaceChildren(...current.a2ATurns.map(turn => {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        const label = document.createElement("span");
+        label.textContent = `TURN ${turn.turn}`;
+        const task = document.createElement("code");
+        task.textContent = turn.taskId;
+        summary.append(label, task);
+        details.append(summary);
+        details.addEventListener("toggle", () => {
+          if (!details.open || details.querySelector("pre")) return;
+          const payload = document.createElement("pre");
+          payload.textContent = `Agent Card: ${turn.agentCardUrl}\nJSON-RPC: ${turn.jsonrpcMethod} ${turn.jsonrpcUrl}\n\nREQUEST\n${JSON.stringify(turn.request, null, 2)}\n\nRESPONSE\n${JSON.stringify(turn.response, null, 2)}`;
+          details.append(payload);
+        });
+        return details;
+      }));
+    }
+
+    function renderAudit() {
+      $("audit").replaceChildren(...current.audit.map(event => {
+        const row = document.createElement("div");
+        row.className = "audit-item";
+        const action = document.createElement("code");
+        action.textContent = `${event.sequence}. ${event.action}`;
+        const detail = document.createElement("p");
+        detail.textContent = event.detail;
+        row.append(action, detail);
+        return row;
+      }));
+    }
+
+    function renderComposer() {
+      const takeover = current.mode === "AGENT_TAKEOVER";
+      const direct = current.mode === "HUMAN_DIRECT";
+      const terminal = isTerminal(current.state);
+      $("startButton").hidden = !current.canStart;
+      $("startButton").disabled = startPending;
+      $("startButton").textContent = startPending ? "正在启动" : "开始 Agent 托管";
+      $("stopButton").hidden = !current.canStop;
+      $("stopButton").disabled = current.state === "STOPPING";
+      $("stopButton").textContent = current.state === "STOPPING" ? "正在停止" : "停止接管";
+      $("directComposer").hidden = !current.canSendDirect;
+      if (direct) {
+        $("composer").hidden = true;
+        $("waiting").hidden = true;
+        return;
+      }
+      if (takeover) {
+        $("composer").hidden = true;
+        $("waiting").hidden = false;
+        if (current.state === "AGENT_READY") {
+          $("waitingTitle").textContent = "等待用户选择托管";
+          $("waitingText").textContent = "房间和沟通目标已经就绪。点击开始后，本地模型才会介入并自动发送。";
+        } else if (current.state === "AGENT_RUNNING") {
+          $("waitingTitle").textContent = "本地模型正在自动沟通";
+          $("waitingText").textContent = "Agent 收到消息后会自动生成并发送下一轮；任一用户都可以停止接管。";
+        } else if (current.state === "STOPPING") {
+          $("waitingTitle").textContent = "正在停止 Agent 接管";
+          $("waitingText").textContent = "当前已经发出的 A2A 请求可能会完成，但不会再发送下一轮。";
+        } else if (current.state === "STOPPED") {
+          $("waitingTitle").textContent = "Agent 对话已暂停";
+          $("waitingText").textContent = current.pauseReason
+            ? `${current.pauseReason} 可以切换到人工直聊介入，也可以重新启动托管。`
+            : "自动发送已经关闭。可以切换到人工直聊介入，也可以重新启动托管。";
+        } else if (current.state === "COMPLETED") {
+          $("waitingTitle").textContent = "本次自动沟通已完成";
+          $("waitingText").textContent = "双方可以查看完整消息、共享上下文和每轮 A2A Task。";
+        } else {
+          $("waitingTitle").textContent = "A2A 任务执行失败";
+          $("waitingText").textContent = current.error || "自动沟通已中断，请查看审计记录。";
+        }
+        return;
+      }
+      $("composer").hidden = !current.canAct;
+      $("waiting").hidden = current.canAct;
+      if (current.canAct && current.pendingDraft) {
+        if (!acting) $("draftText").value = current.pendingDraft.originalText;
+        $("draftTask").textContent = current.pendingDraft.sourceTaskId ? `TASK ${current.pendingDraft.sourceTaskId}` : "INITIAL REQUEST";
+      } else if (terminal) {
+        $("waitingTitle").textContent = current.state === "COMPLETED" ? "本次 Agent 对话已完成" : current.state === "REJECTED" ? "一方已结束会话" : "A2A 任务执行失败";
+        $("waitingText").textContent = current.error || "双方仍可查看已经批准的消息与协议记录。";
+      } else {
+        const waitingForMe = current.waitingForAgentId === current.viewer.agentId;
+        $("waitingTitle").textContent = waitingForMe ? "Agent 正在生成草稿" : `等待${current.other.agentName}审核 Agent 草稿`;
+        $("waitingText").textContent = "未批准的草稿只对所属用户可见。对方批准后，这里会自动更新。";
+      }
+    }
+
+    function render(view) {
+      current = view;
+      const takeover = view.mode === "AGENT_TAKEOVER";
+      const direct = view.mode === "HUMAN_DIRECT";
+      $("app").hidden = false;
+      $("viewerAvatar").textContent = view.viewer.agentName.slice(0, 1);
+      $("viewerName").textContent = `${view.viewer.agentName} · 用户 ${view.viewer.side.toUpperCase()}`;
+      $("viewerRole").textContent = view.viewer.role;
+      $("roomState").textContent = stateLabel(view.state);
+      $("roomGoal").textContent = view.goal;
+      const runLabel = view.runPolicy === "CONTINUOUS" ? "持续会话" : `限定 ${view.maxTurns} 轮`;
+      $("roomRelation").textContent = `${view.viewer.agentName}与${view.other.agentName}的长期沟通 · ${view.messages.length} 条消息 · ${view.a2ATurns.length} 个 A2A Task · ${runLabel}`;
+      $("modeTitle").textContent = takeover ? (view.state === "AGENT_READY" ? "Agent 托管待授权" : view.state === "STOPPED" ? "Agent 对话已暂停" : "Agent 自动托管") : direct ? "人工直接沟通" : "逐条人工审核";
+      $("modeDescription").textContent = takeover
+        ? view.state === "AGENT_READY"
+          ? "当前仅建立沟通窗口，模型尚未介入。任一参与用户可启动托管。"
+          : "本地模型收到消息后自动回复；任一用户都可以旁观并停止。"
+        : direct ? "双方本人直接发送消息，模型不介入；恢复托管后，Agent 会从完整聊天上下文继续。"
+        : "每轮发送前由对应用户审核，可修改草稿或拒绝会话。";
+      $("modeIndicator").textContent = takeover ? (view.state === "AGENT_READY" ? "AWAITING CONSENT" : view.state === "AGENT_RUNNING" ? "AUTO ACTIVE" : "AUTO CONTROL") : direct ? "HUMAN DIRECT" : "HUMAN IN LOOP";
+      $("modeIndicator").classList.toggle("running", takeover && view.state === "AGENT_RUNNING");
+      document.querySelectorAll(".mode-control").forEach(button => {
+        button.classList.toggle("active", button.dataset.mode === view.mode);
+        button.disabled = acting || view.state === "STOPPING";
+      });
+      renderTimeline(); renderContext(); renderEvidence(); renderAudit(); renderComposer();
+      if (isTerminal(view.state) && events) {
+        events.close();
+        events = null;
+        $("connection").classList.remove("live");
+        $("connectionText").textContent = "记录已同步";
+      }
+    }
+
+    async function load() {
+      const response = await fetch(endpoint());
+      if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || "会话读取失败"); }
+      render(await response.json());
+    }
+
+    function connectEvents() {
+      events?.close();
+      events = new EventSource(endpoint("/events"));
+      events.addEventListener("open", () => { $("connection").classList.add("live"); $("connectionText").textContent = "实时连接"; });
+      events.addEventListener("conversation.updated", event => render(JSON.parse(event.data)));
+      events.onerror = () => { $("connection").classList.remove("live"); $("connectionText").textContent = "正在重连"; };
+    }
+
+    async function act(action, body) {
+      acting = true;
+      $("actionError").textContent = "";
+      $("approveButton").disabled = true;
+      $("rejectButton").disabled = true;
+      $("approveButton").textContent = action === "approve" ? "Agent 正在处理" : "批准并发送";
+      try {
+        const response = await fetch(endpoint(`/${action}`), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || "操作失败"); }
+        render(await response.json());
+      } catch (error) {
+        $("actionError").textContent = error.message;
+        if (error.message.includes("reload")) await load();
+      } finally {
+        acting = false;
+        $("approveButton").disabled = false;
+        $("rejectButton").disabled = false;
+        $("approveButton").textContent = "批准并发送";
+      }
+    }
+
+    async function stopTakeover() {
+      $("stopError").textContent = "";
+      $("stopButton").disabled = true;
+      $("stopButton").textContent = "正在停止";
+      try {
+        const response = await fetch(endpoint("/stop"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "用户主动停止 Agent 自动接管" })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || "停止接管失败");
+        }
+        render(await response.json());
+        if (!events && !isTerminal(current.state)) connectEvents();
+      } catch (error) {
+        $("stopError").textContent = error.message;
+        $("stopButton").disabled = false;
+        $("stopButton").textContent = "停止接管";
+      }
+    }
+
+    async function startTakeover() {
+      $("stopError").textContent = "";
+      startPending = true;
+      renderComposer();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(endpoint("/start"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "用户在沟通窗口中授权 Agent 自动接管" }),
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || "启动托管失败");
+        }
+        render(await response.json());
+        if (!events && !isTerminal(current.state)) connectEvents();
+      } catch (error) {
+        $("stopError").textContent = error.name === "AbortError"
+          ? "启动响应超时，正在同步服务端状态。"
+          : error.message;
+        await load().catch(() => {});
+      } finally {
+        clearTimeout(timeout);
+        startPending = false;
+        if (current) renderComposer();
+      }
+    }
+
+    async function switchMode(mode) {
+      if (!current || mode === current.mode) return;
+      acting = true;
+      $("modeError").textContent = "";
+      document.querySelectorAll(".mode-control").forEach(button => { button.disabled = true; });
+      try {
+        const response = await fetch(endpoint("/mode"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, reason: `用户切换到 ${mode}` })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || "切换模式失败");
+        }
+        render(await response.json());
+        if (!events && !isTerminal(current.state)) connectEvents();
+      } catch (error) {
+        $("modeError").textContent = error.message;
+      } finally {
+        acting = false;
+        if (current) render(current);
+      }
+    }
+
+    async function sendDirectMessage(event) {
+      event.preventDefault();
+      const message = $("directText").value.trim();
+      if (!message) { $("directError").textContent = "消息不能为空。"; return; }
+      $("directError").textContent = "";
+      $("directSendButton").disabled = true;
+      try {
+        const response = await fetch(endpoint("/messages"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || "消息发送失败");
+        }
+        $("directText").value = "";
+        render(await response.json());
+      } catch (error) {
+        $("directError").textContent = error.message;
+      } finally {
+        $("directSendButton").disabled = false;
+      }
+    }
+
+    $("composer").addEventListener("submit", event => {
+      event.preventDefault();
+      const message = $("draftText").value.trim();
+      if (!message) { $("actionError").textContent = "草稿不能为空。"; return; }
+      act("approve", { message, expectedVersion: current.version });
+    });
+    $("directComposer").addEventListener("submit", sendDirectMessage);
+    document.querySelectorAll(".mode-control").forEach(button => button.addEventListener("click", () => switchMode(button.dataset.mode)));
+    $("rejectButton").addEventListener("click", () => act("reject", { reason: "本人决定暂不继续这次 Agent 沟通", expectedVersion: current.version }));
+    $("startButton").addEventListener("click", startTakeover);
+    $("stopButton").addEventListener("click", stopTakeover);
+
+    (async () => {
+      if (!roomId || !token) { $("fatal").hidden = false; $("fatalMessage").textContent = "链接缺少 room 或 token。请从双 Agent 调试入口重新创建会话。"; return; }
+      try {
+        await load();
+        if (isTerminal(current.state)) {
+          $("connectionText").textContent = "记录已同步";
+        } else {
+          connectEvents();
+        }
+      } catch (error) { $("fatal").hidden = false; $("fatalMessage").textContent = error.message; }
+    })();
+  </script>
+</body>
+</html>

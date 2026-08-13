@@ -53,6 +53,22 @@ SKILLS = [
         output_modes=["application/json"],
         tags=["opc", "calendar", "scheduling"],
     ),
+    AgentSkill(
+        id="public_inquiry",
+        name="Public Inquiry",
+        description="Answer natural-language questions using only the public OPC profile.",
+        input_modes=["application/json"],
+        output_modes=["application/json"],
+        tags=["opc", "profile", "inquiry"],
+    ),
+    AgentSkill(
+        id="employee_chat",
+        name="Employee Chat",
+        description="Hold a bounded multi-turn Agent conversation with shared context.",
+        input_modes=["application/json"],
+        output_modes=["application/json"],
+        tags=["opc", "conversation", "context"],
+    ),
 ]
 
 

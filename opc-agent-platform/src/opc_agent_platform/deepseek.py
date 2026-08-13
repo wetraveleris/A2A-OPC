@@ -38,6 +38,11 @@ class ReportDecision(BaseModel):
     unconfirmed: list[str]
 
 
+class EmployeeChatDecision(BaseModel):
+    action: Literal["REPLY", "STOP"]
+    reply: str = Field(default="", max_length=500)
+
+
 _EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 _WECHAT = re.compile(r"(?:微信|wechat)\s*(?:号|id)?\s*[:：]\s*\S+", re.IGNORECASE)
@@ -83,8 +88,6 @@ def _limited(items: list[str], limit: int, fallback: str) -> list[str]:
 
 
 class DeepSeekClient:
-    provider = "deepseek"
-
     def __init__(
         self,
         api_key: str,
@@ -92,19 +95,34 @@ class DeepSeekClient:
         model: str = "deepseek-v4-flash",
         thinking: str = "enabled",
         reasoning_effort: str = "medium",
+        provider: Literal["deepseek", "ollama"] = "deepseek",
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        if not api_key:
+        if provider == "deepseek" and not api_key:
             raise ValueError("DeepSeek API key is required")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.thinking = thinking
         self.reasoning_effort = reasoning_effort
+        self.provider = provider
         self.transport = transport
 
     @classmethod
     def from_environment(cls) -> DeepSeekClient | None:
+        provider = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()
+        if provider == "ollama":
+            return cls(
+                api_key="",
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+                model=os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+                thinking="disabled",
+                provider="ollama",
+            )
+        if provider not in {"", "deepseek", "rules"}:
+            raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+        if provider == "rules":
+            return None
         api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
         if not api_key:
             return None
@@ -114,13 +132,21 @@ class DeepSeekClient:
             model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
             thinking=os.getenv("DEEPSEEK_THINKING", "enabled"),
             reasoning_effort=os.getenv("DEEPSEEK_REASONING_EFFORT", "medium"),
+            provider="deepseek",
         )
 
     async def _complete_json(
         self,
         system_prompt: str,
         input_data: dict[str, Any],
+        response_model: type[BaseModel],
     ) -> tuple[dict[str, Any], ModelUsage]:
+        if self.provider == "ollama":
+            return await self._complete_json_ollama(
+                system_prompt,
+                input_data,
+                response_model,
+            )
         payload = {
             "model": self.model,
             "messages": [
@@ -183,6 +209,61 @@ class DeepSeekClient:
         )
         return data, usage
 
+    async def _complete_json_ollama(
+        self,
+        system_prompt: str,
+        input_data: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> tuple[dict[str, Any], ModelUsage]:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(input_data, ensure_ascii=False),
+                },
+            ],
+            "stream": False,
+            "think": False,
+            "format": response_model.model_json_schema(),
+            "options": {"temperature": 0.2, "num_predict": 1200},
+        }
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=120.0,
+        ) as client:
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+            )
+        if response.is_error:
+            try:
+                message = response.json().get("error", "unknown error")
+            except (ValueError, AttributeError):
+                message = "unknown error"
+            raise DeepSeekAPIError(
+                f"Ollama API returned {response.status_code}: {message}"
+            )
+        try:
+            body = response.json()
+            content = body["message"]["content"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise DeepSeekAPIError("Ollama API returned an unexpected response") from exc
+        if not isinstance(content, str) or not content.strip():
+            raise DeepSeekAPIError("Ollama returned an empty JSON response")
+        data = _extract_json(content)
+        _assert_no_contact_details(data)
+        prompt_tokens = int(body.get("prompt_eval_count", 0))
+        completion_tokens = int(body.get("eval_count", 0))
+        return data, ModelUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            calls=1,
+        )
+
     async def generate_agent_decision(
         self,
         receiver: AgentProfile,
@@ -208,11 +289,15 @@ class DeepSeekClient:
             "previousResponse": request.get("previousResponse"),
             "verifiedCandidateSignals": baseline.model_dump(by_alias=True),
         }
-        data, usage = await self._complete_json(system_prompt, input_data)
+        data, usage = await self._complete_json(
+            system_prompt,
+            input_data,
+            AgentDecision,
+        )
         try:
             decision = AgentDecision.model_validate(data)
         except ValidationError as exc:
-            raise DeepSeekAPIError("DeepSeek Agent decision failed schema validation") from exc
+            raise DeepSeekAPIError("Model Agent decision failed schema validation") from exc
         decision.common_ground = _limited(
             decision.common_ground, 3, "双方仍需确认共同目标"
         )
@@ -223,6 +308,54 @@ class DeepSeekClient:
         decision.questions = _limited(
             decision.questions, 2, "双方每周实际投入时间"
         )
+        return decision, usage
+
+    async def generate_employee_chat(
+        self,
+        receiver: AgentProfile,
+        sender: AgentProfile,
+        request: dict[str, Any],
+    ) -> tuple[EmployeeChatDecision, ModelUsage]:
+        system_prompt = (
+            f"你是{receiver.name}的独立 AI Agent，正在与{sender.name}的独立 AI Agent 聊天。"
+            "这和普通 AI 聊天一样：先读 recentHistory，再直接回应 latestMessage。"
+            "保持自己的身份、角色和观点，不要冒充对方，也不要把对方的话换个说法重复一遍。"
+            "对方刚讲过的案例属于对方，绝不能改成自己的经历再次讲述。只有 youRepresent 中明确"
+            "存在的信息才可以说成自己的背景或案例；其余内容必须明确表述为假设、建议或推测。"
+            "回复必须至少做到一项：回答对方的问题、补充一个相关事实或观点、提出一个确有必要"
+            "的问题。不要总结流程，不要汇报进度，不要输出‘收到’、‘保持沟通’、‘下周再同步’"
+            "等没有信息量的话。若没有新的、有用的内容可说，action 必须为 STOP 且 reply 为空。"
+            "最新的 HUMAN_DIRECT 消息是人类介入内容，优先回应，但仍要结合此前对话。"
+            "不得虚构客户、项目、时间、数字、亲身经历、工具结果或本人确认，不得代表本人作出"
+            "合同、付款或长期承诺。回复前检查 recentHistory；如果准备说的核心内容已经出现，"
+            "必须改为 STOP，不能靠换人称、换措辞继续说。"
+            "只输出 JSON，不要 Markdown，格式严格为："
+            '{"action":"REPLY|STOP","reply":"自然中文回复；STOP 时为空"}。'
+        )
+        input_data = {
+            "task": "像普通聊天助手一样决定是否回复，并生成一条有信息量的消息",
+            "conversationTopic": request.get("conversationTopic"),
+            "latestMessage": request.get("message"),
+            "recentHistory": request.get("recentHistory", []),
+            "privateContextPolicy": request.get("privateContextPolicy"),
+            "youRepresent": receiver.public_view(),
+            "otherAgentRepresents": sender.public_view(),
+        }
+        data, usage = await self._complete_json(
+            system_prompt,
+            input_data,
+            EmployeeChatDecision,
+        )
+        try:
+            decision = EmployeeChatDecision.model_validate(data)
+        except ValidationError as exc:
+            raise DeepSeekAPIError(
+                "Model employee chat failed schema validation"
+            ) from exc
+        if decision.action == "REPLY" and not decision.reply.strip():
+            decision.action = "STOP"
+        if decision.action == "STOP":
+            decision.reply = ""
         return decision, usage
 
     async def synthesize_report(
@@ -256,11 +389,15 @@ class DeepSeekClient:
             ],
             "verifiedBaseline": baseline.model_dump(by_alias=True),
         }
-        data, usage = await self._complete_json(system_prompt, input_data)
+        data, usage = await self._complete_json(
+            system_prompt,
+            input_data,
+            ReportDecision,
+        )
         try:
             decision = ReportDecision.model_validate(data)
         except ValidationError as exc:
-            raise DeepSeekAPIError("DeepSeek report failed schema validation") from exc
+            raise DeepSeekAPIError("Model report failed schema validation") from exc
         decision.common_ground = _limited(
             decision.common_ground, 4, "双方愿意进一步了解"
         )
@@ -311,6 +448,10 @@ class DeepSeekClient:
             "otherCalendarStatus": other_availability_status,
             "previousMessage": previous_message,
         }
+        if self.provider == "ollama":
+            async for chunk in self._stream_ollama_text(system_prompt, input_data):
+                yield chunk
+            return
         payload = {
             "model": self.model,
             "messages": [
@@ -362,6 +503,62 @@ class DeepSeekClient:
                     except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
                         raise DeepSeekAPIError(
                             "DeepSeek stream returned an invalid event"
+                        ) from exc
+                    if not delta:
+                        continue
+                    pending += delta
+                    _assert_no_contact_details(pending)
+                    if len(pending) > 20:
+                        safe_length = len(pending) - 16
+                        yield pending[:safe_length]
+                        pending = pending[safe_length:]
+        _assert_no_contact_details(pending)
+        if pending:
+            yield pending
+
+    async def _stream_ollama_text(
+        self,
+        system_prompt: str,
+        input_data: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(input_data, ensure_ascii=False),
+                },
+            ],
+            "stream": True,
+            "think": False,
+            "options": {"temperature": 0.35, "num_predict": 240},
+        }
+        pending = ""
+        async with httpx.AsyncClient(
+            transport=self.transport,
+            timeout=120.0,
+        ) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+            ) as response:
+                if response.is_error:
+                    await response.aread()
+                    raise DeepSeekAPIError(
+                        f"Ollama API returned {response.status_code}: {response.text}"
+                    )
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        event = json.loads(line)
+                        delta = event.get("message", {}).get("content", "")
+                    except (json.JSONDecodeError, TypeError) as exc:
+                        raise DeepSeekAPIError(
+                            "Ollama stream returned an invalid event"
                         ) from exc
                     if not delta:
                         continue

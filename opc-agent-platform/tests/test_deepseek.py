@@ -88,3 +88,81 @@ async def test_deepseek_output_rejects_contact_details() -> None:
             request={"round": 1, "intent": "introduce_opc"},
             baseline=analyze_pair(source, target),
         )
+
+
+@pytest.mark.asyncio
+async def test_ollama_agent_decision_uses_native_json_chat_api() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/chat"
+        assert "Authorization" not in request.headers
+        payload = json.loads(request.content)
+        assert payload["model"] == "qwen3:4b"
+        assert payload["think"] is False
+        assert payload["format"]["type"] == "object"
+        assert set(payload["format"]["required"]) == {
+            "summary",
+            "short_message",
+            "common_ground",
+            "complementarity",
+            "risks",
+            "questions",
+        }
+        assert payload["format"]["properties"]["short_message"]["type"] == "string"
+        assert payload["stream"] is False
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "summary": "双方可以先做小实验。",
+                            "short_message": "建议先验证一个真实需求。",
+                            "common_ground": ["都在做 Agent 产品"],
+                            "complementarity": ["产品与工程互补"],
+                            "risks": ["边界仍需确认"],
+                            "questions": ["如何验收"],
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+                "prompt_eval_count": 120,
+                "eval_count": 36,
+            },
+        )
+
+    client = DeepSeekClient(
+        api_key="",
+        base_url="http://ollama.test",
+        model="qwen3:4b",
+        provider="ollama",
+        transport=httpx.MockTransport(handler),
+    )
+    source = get_profile("opc-builder")
+    target = get_profile("shen-zhiye")
+    decision, usage = await client.generate_agent_decision(
+        receiver=target,
+        sender=source,
+        request={"round": 1, "intent": "introduce_opc"},
+        baseline=analyze_pair(source, target),
+    )
+
+    assert client.provider == "ollama"
+    assert decision.summary == "双方可以先做小实验。"
+    assert usage.total_tokens == 156
+
+
+def test_environment_can_select_ollama_without_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    monkeypatch.setenv("OLLAMA_MODEL", "qwen3:4b")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    client = DeepSeekClient.from_environment()
+
+    assert client is not None
+    assert client.provider == "ollama"
+    assert client.model == "qwen3:4b"
+    assert client.base_url == "http://127.0.0.1:11434"
