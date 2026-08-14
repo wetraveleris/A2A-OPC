@@ -143,6 +143,43 @@ OPC_PUBLIC_BASE_URL=https://orchestrator.example \
 
 使用 Ollama 或配置 DeepSeek 后，两个 Agent 会分别根据自己的公开档案、对方消息和当前共享上下文生成回复。使用 DeepSeek 但没有 `DEEPSEEK_API_KEY` 时会回退到确定性规则。无论哪种模式，每轮仍是独立 A2A Task，不会退化为前端模拟聊天。
 
+### 出站 Relay 双电脑连接
+
+`RELAY_A_B` 模式不要求两台电脑开放入站端口，也不依赖反向 SSH。两台电脑分别运行本地 A2A Runtime 和 `opc-relay-node`，Node 主动通过 WebSocket 连接公网 Relay。Relay 只转发任务和结果，本地 Ollama 不暴露到公网。
+
+Relay 所在服务与两个 Node 必须使用同一个随机 Token：
+
+```dotenv
+OPC_RELAY_URL=wss://your-domain.example/api/relay/ws
+OPC_RELAY_TOKEN=replace-with-a-long-random-token
+```
+
+电脑 A：
+
+```dotenv
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen3:4b
+OPC_NODE_AGENT_ID=opc-builder
+OPC_LOCAL_AGENT_URL=http://127.0.0.1:8012/a2a/opc-builder
+```
+
+电脑 B：
+
+```dotenv
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen3:1.7b
+OPC_NODE_AGENT_ID=shen-zhiye
+OPC_LOCAL_AGENT_URL=http://127.0.0.1:8010/a2a/shen-zhiye
+```
+
+两台电脑在各自的 Agent Runtime 启动后运行：
+
+```bash
+uv run opc-relay-node
+```
+
+访问 `/api/relay/agents` 可以查看两端在线状态和各自模型。页面的 `公网 → 双 Agent 调试` 默认使用 Relay；逐条人工批准和 Agent 托管要求两端在线，人工直聊不调用模型，允许离线创建。
+
 ## 时间确认任务
 
 下面的请求会让两个 Agent 依次执行 `A -> B`、`B -> A`、`A -> B` 三轮确认：

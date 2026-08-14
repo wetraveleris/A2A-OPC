@@ -8,7 +8,7 @@ import httpx
 import uvicorn
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +46,7 @@ from .models import (
     ScreeningRecord,
 )
 from .profiles import PROFILES, get_profile
+from .relay import RelayError, RelayHub
 from .scheduling import ScheduleService, ScheduleStore
 from .store import ScreeningStore
 
@@ -111,9 +112,11 @@ def create_app(
         communicator=communicator,
     )
     human_chat_store = HumanChatStore()
+    relay_hub = RelayHub(token=os.getenv("OPC_RELAY_TOKEN", ""))
     human_chat_service = HumanChatService(
         store=human_chat_store,
         communicator=communicator,
+        relay_hub=relay_hub,
     )
     app.state.screening_store = store
     app.state.screening_service = screening_service
@@ -126,6 +129,31 @@ def create_app(
     app.state.employee_chat_service = employee_chat_service
     app.state.human_chat_store = human_chat_store
     app.state.human_chat_service = human_chat_service
+    app.state.relay_hub = relay_hub
+
+    @app.get("/api/relay/agents")
+    async def relay_agents() -> list[dict[str, object]]:
+        return relay_hub.status(list(PROFILES))
+
+    @app.websocket("/api/relay/ws/{agent_id}")
+    async def relay_websocket(websocket: WebSocket, agent_id: str) -> None:
+        if agent_id not in PROFILES:
+            await websocket.close(code=4404, reason="Unknown Agent")
+            return
+        if not relay_hub.authorized(websocket.headers.get("authorization")):
+            await websocket.close(code=4401, reason="Unauthorized")
+            return
+        await relay_hub.connect(agent_id, websocket)
+        try:
+            while True:
+                message = await websocket.receive_json()
+                await relay_hub.receive(agent_id, message)
+        except WebSocketDisconnect:
+            pass
+        except RelayError as exc:
+            await websocket.close(code=4400, reason=str(exc)[:120])
+        finally:
+            await relay_hub.disconnect(agent_id, websocket)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

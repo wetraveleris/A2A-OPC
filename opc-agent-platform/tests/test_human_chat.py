@@ -83,6 +83,92 @@ async def test_public_computer_topology_supports_all_control_modes_and_routes_to
 
 
 @pytest.mark.asyncio
+async def test_relay_topology_routes_model_turn_to_recipient_node() -> None:
+    app = create_app(base_url="https://public.example", use_environment_llm=False)
+    dispatched: list[tuple[str, dict[str, object]]] = []
+
+    async def fake_dispatch(
+        agent_id: str,
+        payload: dict[str, object],
+    ) -> tuple[str, str, dict[str, object]]:
+        dispatched.append((agent_id, payload))
+        return (
+            "relay-local-task-1",
+            "TASK_STATE_COMPLETED",
+            {"reply": "B 节点通过 Relay 回复", "contextPatch": {}},
+        )
+
+    app.state.relay_hub.dispatch = fake_dispatch
+    app.state.relay_hub.is_online = lambda agent_id: True
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        created = (
+            await client.post(
+                "/api/human-agent-chats",
+                json={
+                    "goal": "验证出站 Relay 双 Agent 对话",
+                    "mode": "HUMAN_APPROVAL",
+                    "topology": "RELAY_A_B",
+                },
+            )
+        ).json()
+        assert created["agentAUrl"] == "relay://opc-builder"
+        assert created["agentBUrl"] == "relay://shen-zhiye"
+        room, token_a = _access(created["participantAUrl"])
+        view = (
+            await client.get(
+                f"/api/human-agent-chats/{room}", params={"token": token_a}
+            )
+        ).json()
+        response = await client.post(
+            f"/api/human-agent-chats/{room}/approve",
+            params={"token": token_a},
+            json={"message": "请 B 节点介绍自己", "expectedVersion": view["version"]},
+        )
+
+    assert response.status_code == 200, response.text
+    assert dispatched[0][0] == "shen-zhiye"
+    assert dispatched[0][1]["recipientAgentId"] == "shen-zhiye"
+
+
+@pytest.mark.asyncio
+async def test_relay_requires_online_nodes_for_model_modes_but_allows_direct() -> None:
+    app = create_app(base_url="https://public.example", use_environment_llm=False)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        for mode in ("HUMAN_APPROVAL", "AGENT_TAKEOVER"):
+            response = await client.post(
+                "/api/human-agent-chats",
+                json={
+                    "goal": "离线节点不能启动模型沟通",
+                    "mode": mode,
+                    "topology": "RELAY_A_B",
+                },
+            )
+            assert response.status_code == 400
+            assert "offline" in response.json()["detail"]
+
+        direct = await client.post(
+            "/api/human-agent-chats",
+            json={
+                "goal": "节点离线时仍可人工沟通",
+                "mode": "HUMAN_DIRECT",
+                "topology": "RELAY_A_B",
+            },
+        )
+
+    assert direct.status_code == 201, direct.text
+    assert direct.json()["topology"] == "RELAY_A_B"
+
+
+@pytest.mark.asyncio
 async def test_two_users_approve_private_agent_drafts_turn_by_turn() -> None:
     app = create_app(base_url="http://testserver", use_environment_llm=False)
     transport = httpx.ASGITransport(app=app)

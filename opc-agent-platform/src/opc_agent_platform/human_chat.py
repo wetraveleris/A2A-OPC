@@ -37,6 +37,7 @@ from .models import (
     HumanChatView,
 )
 from .profiles import get_profile
+from .relay import RelayHub
 
 
 class HumanChatStore:
@@ -85,9 +86,11 @@ class HumanChatService:
         self,
         store: HumanChatStore,
         communicator: A2ACommunicator,
+        relay_hub: RelayHub | None = None,
     ) -> None:
         self.store = store
         self.communicator = communicator
+        self.relay_hub = relay_hub
 
     @staticmethod
     def agent_url(record: HumanChatRecord, agent_id: str) -> str:
@@ -95,6 +98,17 @@ class HumanChatService:
             return record.agent_urls[agent_id]
         except KeyError as exc:
             raise ValueError(f"Conversation has no endpoint for Agent {agent_id}") from exc
+
+    def _require_relay_nodes_online(self, *agent_ids: str) -> None:
+        if self.relay_hub is None:
+            raise ValueError("Relay is not available")
+        offline = [
+            agent_id
+            for agent_id in agent_ids
+            if not self.relay_hub.is_online(agent_id)
+        ]
+        if offline:
+            raise ValueError(f"Relay Agent offline: {', '.join(offline)}")
 
     async def create(self, request: CreateHumanChatRequest) -> HumanChatCreated:
         source = get_profile(request.from_agent_id)
@@ -110,6 +124,13 @@ class HumanChatService:
             target_url = os.getenv("OPC_REMOTE_AGENT_B_URL", "").strip().rstrip("/")
             if not target_url:
                 raise ValueError("Computer B public A2A URL is not configured")
+        elif request.topology == HumanChatTopology.RELAY_A_B:
+            if source.id != "opc-builder" or target.id != "shen-zhiye":
+                raise ValueError("Relay A/B topology requires opc-builder and shen-zhiye")
+            if request.mode != HumanChatMode.HUMAN_DIRECT:
+                self._require_relay_nodes_online(source.id, target.id)
+            source_url = f"relay://{source.id}"
+            target_url = f"relay://{target.id}"
 
         conversation_id = secrets.token_urlsafe(18)
         token_a = secrets.token_urlsafe(24)
@@ -200,10 +221,12 @@ class HumanChatService:
             role=profile.role,
             computer_name=(
                 "电脑 A"
-                if record.topology == HumanChatTopology.PUBLIC_A_B
+                if record.topology
+                in {HumanChatTopology.PUBLIC_A_B, HumanChatTopology.RELAY_A_B}
                 and agent_id == record.from_agent_id
                 else "电脑 B"
-                if record.topology == HumanChatTopology.PUBLIC_A_B
+                if record.topology
+                in {HumanChatTopology.PUBLIC_A_B, HumanChatTopology.RELAY_A_B}
                 else "当前服务"
             ),
             agent_url=self.agent_url(record, agent_id),
@@ -342,8 +365,9 @@ class HumanChatService:
             }
             agent_url = self.agent_url(record, recipient_id)
             try:
-                task_id, task_state, response = await self.communicator.send_json_to_url(
-                    agent_url,
+                task_id, task_state, response = await self._send_to_agent(
+                    record,
+                    recipient_id,
                     payload,
                 )
                 patch = EmployeeChatContextPatch.model_validate(
@@ -416,6 +440,11 @@ class HumanChatService:
                 HumanChatState.STOPPED,
             }:
                 return self.view(record.id, token)
+            if record.topology == HumanChatTopology.RELAY_A_B:
+                self._require_relay_nodes_online(
+                    record.from_agent_id,
+                    record.to_agent_id,
+                )
             if record.pending_draft is None:
                 self._seed_takeover_from_history(record)
             record.stop_requested = False
@@ -441,6 +470,14 @@ class HumanChatService:
             return self.view(record.id, token)
         if record.state in {HumanChatState.REJECTED, HumanChatState.FAILED}:
             raise ValueError("Closed sessions cannot switch mode")
+        if (
+            record.topology == HumanChatTopology.RELAY_A_B
+            and request.mode != HumanChatMode.HUMAN_DIRECT
+        ):
+            self._require_relay_nodes_online(
+                record.from_agent_id,
+                record.to_agent_id,
+            )
 
         if record.state in {
             HumanChatState.AGENT_RUNNING,
@@ -613,7 +650,11 @@ class HumanChatService:
                 payload = self._payload(record, next_turn, speaker_id, recipient_id, message, context_before)
                 agent_url = self.agent_url(record, recipient_id)
                 try:
-                    task_id, task_state, response = await self.communicator.send_json_to_url(agent_url, payload)
+                    task_id, task_state, response = await self._send_to_agent(
+                        record,
+                        recipient_id,
+                        payload,
+                    )
                     patch = EmployeeChatContextPatch.model_validate(response.get("contextPatch", {}))
                     context_after = apply_context_patch(context_before, patch)
                     record.a2a_turns.append(EmployeeChatTurn(
@@ -849,8 +890,9 @@ class HumanChatService:
             context_before,
         )
         agent_url = self.agent_url(record, recipient_id)
-        task_id, task_state, response = await self.communicator.send_json_to_url(
-            agent_url,
+        task_id, task_state, response = await self._send_to_agent(
+            record,
+            recipient_id,
             payload,
         )
         patch = EmployeeChatContextPatch.model_validate(
@@ -919,6 +961,21 @@ class HumanChatService:
             "takeover.stopped",
             actor_agent_id or record.from_agent_id,
             "Agent 接管已停止，可继续托管或切换人工沟通。",
+        )
+
+    async def _send_to_agent(
+        self,
+        record: HumanChatRecord,
+        recipient_id: str,
+        payload: dict[str, object],
+    ) -> tuple[str, str, dict[str, object]]:
+        if record.topology == HumanChatTopology.RELAY_A_B:
+            if self.relay_hub is None:
+                raise RuntimeError("Relay is not available")
+            return await self.relay_hub.dispatch(recipient_id, payload)
+        return await self.communicator.send_json_to_url(
+            self.agent_url(record, recipient_id),
+            payload,
         )
 
     @staticmethod

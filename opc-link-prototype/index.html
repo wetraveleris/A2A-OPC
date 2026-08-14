@@ -482,6 +482,9 @@
     .employee-chat { display: none; }
     .employee-chat.active { display: block; }
     .employee-route { min-height: 104px; }
+    .relay-status { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .relay-status.ready { color: #596a2d; }
+    .relay-status.offline { color: #a7453d; }
     .chat-timeline { padding: 20px 0 5px; border-bottom: 1px solid var(--line); }
     .chat-message { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; margin-bottom: 16px; animation: turn-in .3s cubic-bezier(.16,1,.3,1) both; animation-delay: calc(var(--turn) * 50ms); }
     @keyframes turn-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -822,6 +825,7 @@
                   <small id="employeeAgentBUrl">正在读取 B 端地址</small>
                 </div>
               </section>
+              <p class="relay-status" id="relayStatus">正在检查两台电脑的 Relay 连接</p>
               <form class="internet-form" id="employeeChatForm">
                 <label for="employeeGoal">两位 Agent 要解决的需求</label>
                 <textarea id="employeeGoal" maxlength="500">一起验证个人网站 Agent 能否自动找到合作机会，并形成一个两周内可以执行的下一步。</textarea>
@@ -961,6 +965,8 @@
     let internetTarget = null;
     let internetTargets = [];
     let internetTargetPromise = null;
+    let relayAgents = [];
+    let roomCreating = false;
     let screeningRunning = false;
     const $ = (id) => document.getElementById(id);
     const video = $("candidateVideo");
@@ -1288,6 +1294,37 @@
       }
     }
 
+    async function loadRelayAgents() {
+      try {
+        const response = await fetch("/api/relay/agents", { cache: "no-store" });
+        if (!response.ok) throw new Error("Relay 状态读取失败");
+        relayAgents = await response.json();
+      } catch (error) {
+        relayAgents = [];
+      }
+      renderRelayStatus();
+    }
+
+    function renderRelayStatus() {
+      const findAgent = id => relayAgents.find(agent => agent.agentId === id);
+      const agentA = findAgent("opc-builder");
+      const agentB = findAgent("shen-zhiye");
+      const label = (agent, fallback) => {
+        if (!agent?.online) return `${fallback} · Relay 离线`;
+        const provider = agent.metadata?.provider;
+        const model = agent.metadata?.model;
+        return `${fallback} · 在线${provider ? ` · ${provider}` : ""}${model ? `/${model}` : ""}`;
+      };
+      $("employeeAgentAUrl").textContent = label(agentA, "relay://opc-builder");
+      $("employeeAgentBUrl").textContent = label(agentB, "relay://shen-zhiye");
+      const ready = Boolean(agentA?.online && agentB?.online);
+      $("relayStatus").textContent = ready
+        ? "两台电脑均已连接公网 Relay，可以开始模型沟通。"
+        : `等待${!agentA?.online && !agentB?.online ? "电脑 A、电脑 B" : !agentA?.online ? "电脑 A" : "电脑 B"}连接 Relay。`;
+      $("relayStatus").className = `relay-status ${ready ? "ready" : "offline"}`;
+      updateChatMode();
+    }
+
     async function startInternetA2A(event) {
       event.preventDefault();
       const prompt = $("internetPrompt").value.trim();
@@ -1478,6 +1515,7 @@
       const button = $("employeeChatButton");
       $("employeeChatError").textContent = "";
       $("humanRoomLinks").hidden = true;
+      roomCreating = true;
       button.disabled = true;
       button.textContent = takeover ? "正在创建托管会话" : direct ? "正在创建人工沟通" : "正在创建人工审核会话";
       try {
@@ -1489,7 +1527,7 @@
             toAgentId: "shen-zhiye",
             goal,
             runPolicy: "CONTINUOUS",
-            topology: "PUBLIC_A_B",
+            topology: "RELAY_A_B",
             mode
           })
         });
@@ -1515,7 +1553,7 @@
       } catch (error) {
         $("employeeChatError").textContent = error.message || "双用户会话暂时无法创建。";
       } finally {
-        button.disabled = false;
+        roomCreating = false;
         updateChatMode();
       }
     }
@@ -1524,11 +1562,19 @@
       const mode = document.querySelector('input[name="chatMode"]:checked').value;
       const takeover = mode === "AGENT_TAKEOVER";
       const direct = mode === "HUMAN_DIRECT";
+      const relayReady = ["opc-builder", "shen-zhiye"].every(id =>
+        relayAgents.some(agent => agent.agentId === id && agent.online)
+      );
       $("employeeModeHelp").textContent = takeover
-        ? "先创建 A、B 两个沟通窗口。确认目标并点击开始后，两台电脑的模型才会介入。"
+        ? relayReady
+          ? "先创建 A、B 两个沟通窗口。确认目标并点击开始后，两台电脑的模型才会介入。"
+          : "两台电脑都连接 Relay 后才能创建 Agent 托管会话。"
         : direct ? "创建 A、B 人工沟通窗口，双方可随时切换人工审核或两端 Agent 托管。"
-        : "创建 A、B 两个独立页面。每轮草稿经对应电脑的用户批准后才会发送。";
+        : relayReady
+          ? "创建 A、B 两个独立页面。每轮草稿经对应电脑的用户批准后才会发送。"
+          : "两台电脑都连接 Relay 后才能创建人工审核会话。";
       $("employeeChatButton").textContent = takeover ? "创建 Agent 托管会话" : direct ? "创建人工直聊会话" : "创建人工审核会话";
+      $("employeeChatButton").disabled = roomCreating || (!direct && !relayReady);
     }
 
     function go(viewName) {
@@ -1545,9 +1591,12 @@
       if (viewName === "discover") video.play().catch(() => {});
       if (viewName === "profile") renderProfile();
       if (viewName === "connect") screeningRunning ? setScreeningLoading(screeningCandidate) : renderConnect();
-      if (viewName === "internet") loadInternetTarget().catch(error => {
-        $("internetError").textContent = error.message || "公网 Agent 发现失败";
-      });
+      if (viewName === "internet") {
+        loadInternetTarget().catch(error => {
+          $("internetError").textContent = error.message || "公网 Agent 发现失败";
+        });
+        loadRelayAgents();
+      }
       if (viewName === "onboarding") $("opcStatement").focus({ preventScroll: true });
       $("phone").scrollTop = 0;
       window.scrollTo(0, 0);
@@ -1679,6 +1728,9 @@
     });
 
     renderCandidate(false);
+    setInterval(() => {
+      if ($("internetView").classList.contains("active")) loadRelayAgents();
+    }, 5000);
     setTimeout(() => video.play().catch(() => {}), 350);
   </script>
 </body>

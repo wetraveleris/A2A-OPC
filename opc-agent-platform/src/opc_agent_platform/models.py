@@ -386,6 +386,7 @@ class HumanChatMessageSource(StrEnum):
 class HumanChatTopology(StrEnum):
     LOCAL = "LOCAL"
     PUBLIC_A_B = "PUBLIC_A_B"
+    RELAY_A_B = "RELAY_A_B"
 
 
 class CreateHumanChatRequest(APIModel):
