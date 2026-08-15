@@ -42,6 +42,10 @@ class EmployeeChatDecision(BaseModel):
     reply: str = Field(default="", max_length=500)
 
 
+class PublicInquiryDecision(BaseModel):
+    answer: str = Field(min_length=1, max_length=500)
+
+
 _EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 _WECHAT = re.compile(r"(?:微信|wechat)\s*(?:号|id)?\s*[:：]\s*\S+", re.IGNORECASE)
@@ -96,6 +100,7 @@ class DeepSeekClient:
         reasoning_effort: str = "medium",
         provider: Literal["deepseek", "ollama"] = "deepseek",
         transport: httpx.AsyncBaseTransport | None = None,
+        trust_env: bool | None = None,
     ) -> None:
         if provider == "deepseek" and not api_key:
             raise ValueError("DeepSeek API key is required")
@@ -106,6 +111,7 @@ class DeepSeekClient:
         self.reasoning_effort = reasoning_effort
         self.provider = provider
         self.transport = transport
+        self.trust_env = provider != "ollama" if trust_env is None else trust_env
 
     @classmethod
     def from_environment(cls) -> DeepSeekClient | None:
@@ -149,7 +155,7 @@ class DeepSeekClient:
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": f"/no_think\n{system_prompt}"},
                 {
                     "role": "user",
                     "content": json.dumps(input_data, ensure_ascii=False),
@@ -165,6 +171,7 @@ class DeepSeekClient:
         async with httpx.AsyncClient(
             transport=self.transport,
             timeout=45.0,
+            trust_env=self.trust_env,
         ) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
@@ -214,10 +221,15 @@ class DeepSeekClient:
         input_data: dict[str, Any],
         response_model: type[BaseModel],
     ) -> tuple[dict[str, Any], ModelUsage]:
+        num_predict = (
+            240
+            if response_model in {EmployeeChatDecision, PublicInquiryDecision}
+            else 1200
+        )
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": f"/no_think\n{system_prompt}"},
                 {
                     "role": "user",
                     "content": json.dumps(input_data, ensure_ascii=False),
@@ -226,11 +238,12 @@ class DeepSeekClient:
             "stream": False,
             "think": False,
             "format": response_model.model_json_schema(),
-            "options": {"temperature": 0.2, "num_predict": 1200},
+            "options": {"temperature": 0.2, "num_predict": num_predict},
         }
         async with httpx.AsyncClient(
             transport=self.transport,
             timeout=120.0,
+            trust_env=self.trust_env,
         ) as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
@@ -360,6 +373,35 @@ class DeepSeekClient:
             decision.action = "STOP"
         if decision.action == "STOP":
             decision.reply = ""
+        return decision, usage
+
+    async def generate_public_inquiry(
+        self,
+        profile: AgentProfile,
+        question: str,
+    ) -> tuple[PublicInquiryDecision, ModelUsage]:
+        system_prompt = (
+            f"你是{profile.name}的 OPC Agent。直接回答访客问题，并明确自己是代表"
+            f"{profile.name}公开沟通的 AI Agent。只能使用 publicProfile 中的信息，"
+            "不得虚构经历、数据、承诺或联系方式，不得泄露任何未提供的私人信息。"
+            "回答使用自然、简洁的中文，最多三句话。只输出 JSON，严格格式为："
+            '{"answer":"回答内容"}。'
+        )
+        data, usage = await self._complete_json(
+            system_prompt,
+            {
+                "task": "回答公网访客对这个 OPC Agent 的问题",
+                "question": question,
+                "publicProfile": profile.public_view(),
+            },
+            PublicInquiryDecision,
+        )
+        try:
+            decision = PublicInquiryDecision.model_validate(data)
+        except ValidationError as exc:
+            raise DeepSeekAPIError(
+                "Model public inquiry failed schema validation"
+            ) from exc
         return decision, usage
 
     async def synthesize_report(

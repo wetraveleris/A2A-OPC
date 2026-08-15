@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
@@ -71,9 +72,15 @@ class A2ACommunicator:
         self,
         base_url: str,
         transport: httpx.AsyncBaseTransport | None = None,
+        request_timeout: float | None = None,
+        trust_env: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.transport = transport
+        self.trust_env = trust_env
+        self.request_timeout = request_timeout or float(
+            os.getenv("A2A_REQUEST_TIMEOUT", "120")
+        )
 
     async def send(
         self,
@@ -83,8 +90,9 @@ class A2ACommunicator:
         target_url = f"{self.base_url}/a2a/{target_agent_id}"
         async with httpx.AsyncClient(
             transport=self.transport,
-            timeout=60.0,
+            timeout=self.request_timeout,
             follow_redirects=True,
+            trust_env=self.trust_env,
         ) as http_client:
             client = await create_client(
                 agent=target_url,
@@ -132,8 +140,9 @@ class A2ACommunicator:
     ) -> A2ATaskTextResult:
         async with httpx.AsyncClient(
             transport=self.transport,
-            timeout=60.0,
+            timeout=self.request_timeout,
             follow_redirects=True,
+            trust_env=self.trust_env,
         ) as http_client:
             client = await create_client(
                 agent=agent_url.rstrip("/"),
@@ -184,8 +193,9 @@ class A2ACommunicator:
     ) -> tuple[str, str, dict[str, Any]]:
         async with httpx.AsyncClient(
             transport=self.transport,
-            timeout=60.0,
+            timeout=self.request_timeout,
             follow_redirects=True,
+            trust_env=self.trust_env,
         ) as http_client:
             client = await create_client(
                 agent=agent_url.rstrip("/"),
@@ -235,8 +245,9 @@ class A2ACommunicator:
         task_id = ""
         async with httpx.AsyncClient(
             transport=self.transport,
-            timeout=60.0,
+            timeout=self.request_timeout,
             follow_redirects=True,
+            trust_env=self.trust_env,
         ) as http_client:
             client = await create_client(
                 agent=target_url,

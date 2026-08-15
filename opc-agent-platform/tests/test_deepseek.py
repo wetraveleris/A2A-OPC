@@ -187,6 +187,46 @@ async def test_ollama_agent_decision_uses_native_json_chat_api() -> None:
     assert usage.total_tokens == 156
 
 
+@pytest.mark.asyncio
+async def test_ollama_public_inquiry_uses_public_profile() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["model"] == "qwen3:1.7b"
+        assert payload["think"] is False
+        assert payload["options"]["num_predict"] == 240
+        assert "/no_think" in payload["messages"][0]["content"]
+        assert "publicProfile" in json.loads(payload["messages"][1]["content"])
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {"answer": "我是一个基于本地模型运行的 OPC Agent。"},
+                        ensure_ascii=False,
+                    ),
+                },
+                "prompt_eval_count": 80,
+                "eval_count": 18,
+            },
+        )
+
+    client = DeepSeekClient(
+        api_key="",
+        base_url="http://ollama.test",
+        model="qwen3:1.7b",
+        provider="ollama",
+        transport=httpx.MockTransport(handler),
+    )
+    decision, usage = await client.generate_public_inquiry(
+        profile=get_profile("shen-zhiye"),
+        question="你是谁？",
+    )
+
+    assert decision.answer == "我是一个基于本地模型运行的 OPC Agent。"
+    assert usage.total_tokens == 98
+
+
 def test_environment_can_select_ollama_without_api_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -201,3 +241,4 @@ def test_environment_can_select_ollama_without_api_key(
     assert client.provider == "ollama"
     assert client.model == "qwen3:4b"
     assert client.base_url == "http://127.0.0.1:11434"
+    assert client.trust_env is False

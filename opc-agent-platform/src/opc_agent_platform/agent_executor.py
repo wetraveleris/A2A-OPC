@@ -14,7 +14,7 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState
 
-from .deepseek import DeepSeekClient
+from .deepseek import DeepSeekAPIError, DeepSeekClient
 from .matching import analyze_pair
 from .models import AgentProfile
 
@@ -75,7 +75,7 @@ class OPCDecisionEngine:
             raise ValueError("Sensitive fields are not allowed in automated screening")
 
         if request.get("protocol") == "opc.public_inquiry.v1":
-            return self._respond_to_public_inquiry(request)
+            return await self._respond_to_public_inquiry(request)
         if request.get("protocol") == "opc.employee_chat.v1":
             return await self._respond_to_employee_chat(request)
 
@@ -156,8 +156,13 @@ class OPCDecisionEngine:
             "humanConfirmationRequired": True,
         }
 
-    def _respond_to_public_inquiry(self, request: dict[str, Any]) -> dict[str, Any]:
-        question = str(request.get("question", "")).strip()
+    async def _respond_to_public_inquiry(
+        self,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        question = str(request.get("question") or request.get("prompt") or "").strip()
+        if not question:
+            raise ValueError("Public inquiry question must not be empty")
         normalized = question.lower()
         if any(marker in normalized for marker in ("你是谁", "who are you", "介绍", "identity")):
             answer = (
@@ -174,6 +179,22 @@ class OPCDecisionEngine:
                 f"协作方式是：{self.profile.collaboration_style}"
             )
 
+        decision_engine: dict[str, Any] = {"provider": "rules", "model": None}
+        if self.deepseek_client:
+            try:
+                decision, usage = await self.deepseek_client.generate_public_inquiry(
+                    profile=self.profile,
+                    question=question,
+                )
+                answer = decision.answer
+                decision_engine = {
+                    "provider": self.deepseek_client.provider,
+                    "model": self.deepseek_client.model,
+                    "usage": usage.model_dump(by_alias=True),
+                }
+            except DeepSeekAPIError:
+                logger.exception("Public inquiry model call failed; using rules fallback")
+
         return {
             "protocol": "opc.public_inquiry.v1",
             "agentId": self.profile.id,
@@ -182,7 +203,7 @@ class OPCDecisionEngine:
             "answer": answer,
             "publicProfile": self.profile.public_view(),
             "humanConfirmationRequired": False,
-            "decisionEngine": {"provider": "rules", "model": None},
+            "decisionEngine": decision_engine,
         }
 
     async def _respond_to_employee_chat(

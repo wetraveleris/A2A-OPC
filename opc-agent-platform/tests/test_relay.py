@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from opc_agent_platform import relay_node
 from opc_agent_platform.relay import RelayError, RelayHub
 from opc_agent_platform.relay_node import execute_local_task
 
@@ -20,6 +21,36 @@ class FakeWebSocket:
 
     async def close(self, code: int, reason: str) -> None:
         self.closed = (code, reason)
+
+
+@pytest.mark.asyncio
+async def test_relay_node_bypasses_environment_proxy_for_local_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeCommunicator:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    def cancel_connect(*args: object, **kwargs: object) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(relay_node, "A2ACommunicator", FakeCommunicator)
+    monkeypatch.setattr(relay_node, "connect", cancel_connect)
+
+    with pytest.raises(asyncio.CancelledError):
+        await relay_node.run_node(
+            relay_url="wss://relay.example/api/relay/ws",
+            relay_token="secret",
+            agent_id="shen-zhiye",
+            local_agent_url="http://127.0.0.1:8010/a2a/shen-zhiye",
+        )
+
+    assert captured == {
+        "base_url": "http://127.0.0.1:8010/a2a/shen-zhiye",
+        "trust_env": False,
+    }
 
 
 @pytest.mark.asyncio

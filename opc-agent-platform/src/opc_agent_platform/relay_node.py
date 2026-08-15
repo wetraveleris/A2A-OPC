@@ -52,7 +52,7 @@ async def run_node(
     agent_id: str,
     local_agent_url: str,
 ) -> None:
-    communicator = A2ACommunicator(base_url=local_agent_url)
+    communicator = A2ACommunicator(base_url=local_agent_url, trust_env=False)
     headers = {"Authorization": f"Bearer {relay_token}"} if relay_token else None
     delay = 1.0
     while True:
