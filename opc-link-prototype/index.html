@@ -1289,25 +1289,18 @@
     }
 
     async function openConnectionChat(connectionId) {
-      const goal = window.prompt(
-        "这次想继续了解什么？",
-        "继续深入了解彼此的目标、能力与下一步合作可能。"
-      );
-      if (!goal || !goal.trim()) return;
       try {
         const room = await apiJson(`/api/connections/${encodeURIComponent(connectionId)}/chat-rooms`, {
           method: "POST",
-          body: JSON.stringify({ goal: goal.trim(), mode: "HUMAN_DIRECT", runPolicy: "CONTINUOUS" })
+          body: JSON.stringify({
+            goal: "继续深入了解彼此的目标、能力与下一步合作可能。",
+            mode: "HUMAN_DIRECT",
+            runPolicy: "CONTINUOUS"
+          })
         });
-        const ownUrl = new URL(room.participantAUrl, window.location.origin);
-        const otherUrl = new URL(room.participantBUrl, window.location.origin).href;
-        try {
-          await navigator.clipboard.writeText(otherUrl);
-        } catch {
-          window.prompt("复制这个入口给对方电脑", otherUrl);
-        }
+        const ownUrl = new URL(room.participantUrl || room.participantAUrl, window.location.origin);
         window.open(ownUrl.href, "_blank", "noopener");
-        showToast("你的沟通窗口已打开，对方入口已复制；房间内可切换三种模式");
+        showToast("已打开与该联系人的固定会话");
       } catch (error) {
         showToast(error.message || "暂时无法创建沟通房间");
       }

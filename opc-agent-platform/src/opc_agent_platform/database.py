@@ -175,6 +175,34 @@ class Connection(Base):
     )
 
 
+class ConversationRoom(Base):
+    """Stable chat identity for a connection.
+
+    The state snapshot keeps the existing auditable A2A state machine intact while
+    allowing the room and its history to survive process restarts. A normalized
+    message table can be introduced later without changing the public API.
+    """
+
+    __tablename__ = "conversation_rooms"
+    __table_args__ = (
+        UniqueConstraint("connection_id", name="uq_conversation_connection"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    connection_id: Mapped[str | None] = mapped_column(
+        ForeignKey("connections.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    token_a: Mapped[str] = mapped_column(String(128), unique=True)
+    token_b: Mapped[str] = mapped_column(String(128), unique=True)
+    record: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class AgentIntroduction(Base):
     __tablename__ = "agent_introductions"
 

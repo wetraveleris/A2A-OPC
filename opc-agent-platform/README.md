@@ -129,7 +129,7 @@ curl -X POST http://127.0.0.1:8010/api/internet-a2a/demo \
 
 登录后进入 `我的 → 开发调试：公网 A2A`，切换到 `双 Agent 调试`。陈默 Agent 与沈知野 Agent 拥有独立身份和角色提示，通过 A2A `message/send` 交替聊天。每轮请求会携带最近聊天历史，因此两个 Agent 能像普通 AI 聊天窗口一样理解上下文并自然接续。
 
-当前页面会创建两个带独立访问令牌的长期会话链接，分别对应用户 A 和用户 B。创建后及沟通过程中都可以切换控制模式，建议把两个链接放在两个浏览器窗口、无痕窗口或两台设备中打开：
+连接建立后，每个 `connection_id` 只创建一个固定聊天房间；双方从 `连接` 列表点击联系人即可打开自己的入口。房间使用独立访问令牌，历史消息保存在数据库，服务重启后仍可恢复。
 
 - `逐条人工批准`：用户 A 和用户 B 分别审核自己 Agent 的草稿，批准后才发送。
 - `Agent 托管`：先创建并打开沟通窗口；任一参与用户确认目标并点击开始后，本地模型才自动生成和发送下一轮。
@@ -139,7 +139,7 @@ curl -X POST http://127.0.0.1:8010/api/internet-a2a/demo \
 - 用户 B 只能查看和批准沈知野 Agent 的待发送草稿。
 - 草稿可以由本人编辑，也可以拒绝并结束会话。
 - 未批准草稿及其 A2A Artifact 对另一方不可见。
-- 批准后，消息、共享上下文和协议证据通过 SSE 自动同步到两个页面。
+- 消息、共享上下文和协议证据优先通过 WebSocket 自动同步到两个页面；不支持 WebSocket 的代理会自动回退到 SSE。
 - 每个批准请求携带会话版本，重复点击或过期页面不能覆盖新状态。
 - 启动后的自动接管由后端运行，不要求两个页面保持打开；任一用户都可以停止。停止时已经发出的请求可能完成，但不会继续发送下一轮。
 - Agent 托管和人工审核中的 Agent 回复都会创建独立 A2A Task，并保留共享上下文、Task ID、请求、响应和审计事件；人工直聊记录消息与审计，但不伪造 A2A Task。
@@ -212,3 +212,14 @@ uv run opc-relay-node
 ```
 
 访问 `/api/relay/agents` 可以查看两端在线状态和各自模型。页面的 `公网 → 双 Agent 调试` 默认使用 Relay；逐条人工批准和 Agent 托管要求两端在线，人工直聊不调用模型，允许离线创建。
+
+### 固定联系人 IM
+
+联系人聊天使用以下接口，A2A 只负责 Agent 托管/审核中的模型任务，不替代人工 IM：
+
+- `POST /api/connections/{connection_id}/chat-rooms`：创建或获取固定房间，重复调用返回同一个房间。
+- `GET /api/human-agent-chats/{conversation_id}?token=...`：读取完整历史和当前模式。
+- `POST /api/human-agent-chats/{conversation_id}/messages?token=...`：人工直聊发送消息。
+- `WS /api/human-agent-chats/{conversation_id}/ws?token=...`：实时接收统一时间线；每条消息包含人工、Agent、A2A Task 信息。
+
+生产环境必须让所有 OPC API 实例使用同一个 PostgreSQL `OPC_DATABASE_URL`，并通过同一个 HTTPS 域名提供聊天页面和 WebSocket。当前默认 SQLite 适合单机调试；它不会自动把两个不同电脑上的本地数据库同步成一个公网聊天数据库。Relay 当前仍只承担 Agent Task 转发，人工 IM 的跨设备部署应先走统一 OPC API/数据库，后续再接入 Matrix 作为独立消息基础设施。

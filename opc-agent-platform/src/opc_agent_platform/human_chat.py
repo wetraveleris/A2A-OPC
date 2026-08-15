@@ -10,7 +10,10 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 
+from sqlalchemy import select
+
 from .conversation import A2ACommunicator
+from .database import ConversationRoom, Database, utc_now
 from .employee_chat import apply_context_patch
 from .models import (
     CreateHumanChatRequest,
@@ -41,7 +44,8 @@ from .relay import RelayHub
 
 
 class HumanChatStore:
-    def __init__(self) -> None:
+    def __init__(self, database: Database | None = None) -> None:
+        self.database = database
         self._records: dict[str, HumanChatRecord] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._conditions: dict[str, asyncio.Condition] = {}
@@ -50,12 +54,98 @@ class HumanChatStore:
         self._records[record.id] = record
         self._locks[record.id] = asyncio.Lock()
         self._conditions[record.id] = asyncio.Condition()
+        self._persist(record)
+
+    def find_by_connection(self, connection_id: str) -> HumanChatRecord | None:
+        if self.database is None:
+            return next(
+                (
+                    record
+                    for record in self._records.values()
+                    if record.connection_id == connection_id
+                ),
+                None,
+            )
+        with self.database.session() as session:
+            room = session.scalar(
+                select(ConversationRoom).where(
+                    ConversationRoom.connection_id == connection_id
+                )
+            )
+            if room is None:
+                return None
+            raw_record = dict(room.record)
+            raw_record["accessTokens"] = {
+                record_id: token
+                for record_id, token in (
+                    ("from", room.token_a),
+                    ("to", room.token_b),
+                )
+            }
+            parsed = HumanChatRecord.model_validate(raw_record)
+            record = parsed.model_copy(
+                update={
+                    "access_tokens": {
+                        parsed.from_agent_id: room.token_a,
+                        parsed.to_agent_id: room.token_b,
+                    }
+                }
+            )
+        self._hydrate(record)
+        return record
 
     def get(self, conversation_id: str) -> HumanChatRecord:
+        if conversation_id not in self._records and self.database is not None:
+            with self.database.session() as session:
+                room = session.get(ConversationRoom, conversation_id)
+                if room is not None:
+                    raw_record = dict(room.record)
+                    raw_record["accessTokens"] = {
+                        "from": room.token_a,
+                        "to": room.token_b,
+                    }
+                    record = HumanChatRecord.model_validate(raw_record)
+                    self._hydrate(
+                        record.model_copy(
+                            update={
+                                "access_tokens": {
+                                    record.from_agent_id: room.token_a,
+                                    record.to_agent_id: room.token_b,
+                                }
+                            }
+                        )
+                    )
         try:
             return self._records[conversation_id]
         except KeyError as exc:
             raise KeyError(f"Unknown human Agent chat: {conversation_id}") from exc
+
+    def _hydrate(self, record: HumanChatRecord) -> None:
+        self._records[record.id] = record
+        self._locks.setdefault(record.id, asyncio.Lock())
+        self._conditions.setdefault(record.id, asyncio.Condition())
+
+    def save(self, record: HumanChatRecord) -> None:
+        self._persist(record)
+
+    def _persist(self, record: HumanChatRecord) -> None:
+        if self.database is None:
+            return
+        with self.database.session() as session:
+            room = session.get(ConversationRoom, record.id)
+            if room is None:
+                room = ConversationRoom(
+                    id=record.id,
+                    connection_id=record.connection_id,
+                    token_a=record.access_tokens.get(record.from_agent_id, ""),
+                    token_b=record.access_tokens.get(record.to_agent_id, ""),
+                    record=record.model_dump(mode="json", by_alias=True),
+                )
+                session.add(room)
+            else:
+                room.record = record.model_dump(mode="json", by_alias=True)
+                room.updated_at = utc_now()
+            session.commit()
 
     def lock(self, conversation_id: str) -> asyncio.Lock:
         self.get(conversation_id)
@@ -71,14 +161,16 @@ class HumanChatStore:
         version: int,
         timeout: float = 15.0,
     ) -> None:
-        condition = self._conditions[conversation_id]
-        async with condition:
-            if self.get(conversation_id).version != version:
+        # The same app can be exercised by multiple TestClient event loops, and
+        # production deployments may have more than one request loop. Polling the
+        # in-process version avoids binding an asyncio.Condition to one loop while
+        # keeping the UI update latency below 100 ms.
+        deadline = asyncio.get_running_loop().time() + timeout
+        while self.get(conversation_id).version == version:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
                 return
-            try:
-                await asyncio.wait_for(condition.wait(), timeout=timeout)
-            except TimeoutError:
-                return
+            await asyncio.sleep(min(0.1, remaining))
 
 
 class HumanChatService:
@@ -99,6 +191,38 @@ class HumanChatService:
         except KeyError as exc:
             raise ValueError(f"Conversation has no endpoint for Agent {agent_id}") from exc
 
+    @staticmethod
+    def _created(
+        record: HumanChatRecord,
+        viewer_agent_id: str | None = None,
+    ) -> HumanChatCreated:
+        page = "/app/agent-room.html"
+        participant_a_url = (
+            f"{page}?room={record.id}&token="
+            f"{record.access_tokens[record.from_agent_id]}"
+        )
+        participant_b_url = (
+            f"{page}?room={record.id}&token="
+            f"{record.access_tokens[record.to_agent_id]}"
+        )
+        return HumanChatCreated(
+            id=record.id,
+            mode=record.mode,
+            state=record.state,
+            topology=record.topology,
+            agent_a_url=record.agent_urls[record.from_agent_id],
+            agent_b_url=record.agent_urls[record.to_agent_id],
+            participant_a_url=participant_a_url,
+            participant_b_url=participant_b_url,
+            participant_url=(
+                participant_a_url
+                if viewer_agent_id == record.from_agent_id
+                else participant_b_url
+                if viewer_agent_id == record.to_agent_id
+                else None
+            ),
+        )
+
     def _require_relay_nodes_online(self, *agent_ids: str) -> None:
         if self.relay_hub is None:
             raise ValueError("Relay is not available")
@@ -111,6 +235,10 @@ class HumanChatService:
             raise ValueError(f"Relay Agent offline: {', '.join(offline)}")
 
     async def create(self, request: CreateHumanChatRequest) -> HumanChatCreated:
+        if request.connection_id:
+            existing = self.store.find_by_connection(request.connection_id)
+            if existing is not None:
+                return self._created(existing, request.from_agent_id)
         source = request.source_profile or get_profile(request.from_agent_id)
         target = request.target_profile or get_profile(request.to_agent_id)
         if source.id == target.id:
@@ -198,17 +326,7 @@ class HumanChatService:
             ],
         )
         await self.store.create(record)
-        page = "/app/agent-room.html"
-        return HumanChatCreated(
-            id=record.id,
-            mode=record.mode,
-            state=record.state,
-            topology=record.topology,
-            agent_a_url=source_url,
-            agent_b_url=target_url,
-            participant_a_url=f"{page}?room={record.id}&token={token_a}",
-            participant_b_url=f"{page}?room={record.id}&token={token_b}",
-        )
+        return self._created(record, source.id)
 
     def _viewer_agent_id(self, record: HumanChatRecord, token: str) -> str:
         for agent_id, expected in record.access_tokens.items():
@@ -822,10 +940,10 @@ class HumanChatService:
             await self.store.wait_for_change(conversation_id, version)
             yield ": keep-alive\n\n"
 
-    @staticmethod
-    def _touch(record: HumanChatRecord) -> None:
+    def _touch(self, record: HumanChatRecord) -> None:
         record.version += 1
         record.updated_at = datetime.now(timezone.utc)
+        self.store.save(record)
 
     @staticmethod
     def _limit_reached(record: HumanChatRecord, turn: int) -> bool:

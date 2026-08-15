@@ -404,6 +404,7 @@ class HumanChatCreated(APIModel):
     agent_b_url: str
     participant_a_url: str
     participant_b_url: str
+    participant_url: str | None = None
 
 
 class HumanChatApprovalRequest(APIModel):

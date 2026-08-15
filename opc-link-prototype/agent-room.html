@@ -450,10 +450,40 @@
 
     function connectEvents() {
       events?.close();
-      events = new EventSource(endpoint("/events"));
-      events.addEventListener("open", () => { $("connection").classList.add("live"); $("connectionText").textContent = "实时连接"; });
-      events.addEventListener("conversation.updated", event => render(JSON.parse(event.data)));
-      events.onerror = () => { $("connection").classList.remove("live"); $("connectionText").textContent = "正在重连"; };
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const socketUrl = `${protocol}//${window.location.host}/api/human-agent-chats/${encodeURIComponent(roomId)}/ws?token=${encodeURIComponent(token)}`;
+      const socket = new WebSocket(socketUrl);
+      events = socket;
+      socket.addEventListener("open", () => {
+        $("connection").classList.add("live");
+        $("connectionText").textContent = "实时连接";
+      });
+      socket.addEventListener("message", event => render(JSON.parse(event.data)));
+      socket.addEventListener("error", () => {
+        $("connection").classList.remove("live");
+        $("connectionText").textContent = "正在重连";
+      });
+      socket.addEventListener("close", () => {
+        if (events === socket) {
+          connectLegacyEvents();
+        }
+      });
+    }
+
+    function connectLegacyEvents() {
+      events?.close();
+      if (isTerminal(current?.state)) return;
+      const source = new EventSource(endpoint("/events"));
+      events = source;
+      source.addEventListener("open", () => {
+        $("connection").classList.add("live");
+        $("connectionText").textContent = "实时连接";
+      });
+      source.addEventListener("conversation.updated", event => render(JSON.parse(event.data)));
+      source.onerror = () => {
+        $("connection").classList.remove("live");
+        $("connectionText").textContent = "正在重连";
+      };
     }
 
     async function act(action, body) {

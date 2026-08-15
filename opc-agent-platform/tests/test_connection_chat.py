@@ -2,6 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from opc_agent_platform.app import create_app
@@ -105,6 +106,126 @@ async def test_connected_user_can_open_room_with_introduction_context(tmp_path) 
             json={"goal": "越权", "mode": "HUMAN_DIRECT"},
         )
         assert forbidden.status_code == 404
+
+
+def test_connection_uses_one_persistent_room_and_realtime_timeline(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'persistent-chat.db'}"
+    app = create_app(
+        base_url="http://testserver",
+        use_environment_llm=False,
+        database_url=database_url,
+    )
+    with TestClient(app) as alice, TestClient(app) as bob:
+        assert alice.post(
+            "/api/auth/register",
+            json={
+                "username": "persist-alice",
+                "email": "persist-alice@example.com",
+                "password": "alice secure password",
+                "displayName": "Alice",
+            },
+        ).status_code == 201
+        assert bob.post(
+            "/api/auth/register",
+            json={
+                "username": "persist-bob",
+                "email": "persist-bob@example.com",
+                "password": "bob secure password",
+                "displayName": "Bob",
+            },
+        ).status_code == 201
+        request = alice.post(
+            "/api/connection-requests",
+            json={"targetUsername": "persist-bob", "message": "开始聊天"},
+        )
+        request_id = request.json()["id"]
+        assert bob.post(f"/api/connection-requests/{request_id}/accept").status_code == 204
+
+        with app.state.database.session() as session:
+            users = {
+                username: session.scalar(select_user(username))
+                for username in ("persist-alice", "persist-bob")
+            }
+            connection = session.scalar(
+                select(Connection).where(
+                    (Connection.user_a_id == users["persist-alice"].id)
+                    | (Connection.user_b_id == users["persist-alice"].id)
+                )
+            )
+            session.add_all(
+                [
+                    Device(
+                        user_id=users["persist-alice"].id,
+                        agent_id="opc-builder",
+                        name="Alice node",
+                    ),
+                    Device(
+                        user_id=users["persist-bob"].id,
+                        agent_id="shen-zhiye",
+                        name="Bob node",
+                    ),
+                ]
+            )
+            session.commit()
+            connection_id = connection.id
+
+        created_a_response = alice.post(
+            f"/api/connections/{connection_id}/chat-rooms",
+            json={"mode": "HUMAN_DIRECT"},
+        )
+        assert created_a_response.status_code == 201, created_a_response.text
+        created_a = created_a_response.json()
+        created_b_response = bob.post(
+            f"/api/connections/{connection_id}/chat-rooms",
+            json={"mode": "HUMAN_DIRECT"},
+        )
+        assert created_b_response.status_code == 201, created_b_response.text
+        created_b = created_b_response.json()
+        assert created_a["id"] == created_b["id"]
+        assert created_a["participantUrl"] != created_b["participantUrl"]
+
+        room_a, token_a = _room_access(created_a["participantUrl"])
+        room_b, token_b = _room_access(created_b["participantUrl"])
+        assert room_a == room_b == created_a["id"]
+        with alice.websocket_connect(
+            f"/api/human-agent-chats/{room_a}/ws?token={token_a}"
+        ) as socket_a, bob.websocket_connect(
+            f"/api/human-agent-chats/{room_b}/ws?token={token_b}"
+        ) as socket_b:
+            assert socket_a.receive_json()["messages"] == []
+            assert socket_b.receive_json()["messages"] == []
+            sent = alice.post(
+                f"/api/human-agent-chats/{room_a}/messages",
+                params={"token": token_a},
+                json={"message": "你是谁？"},
+            )
+            assert sent.status_code == 200, sent.text
+            assert socket_b.receive_json()["messages"][0]["text"] == "你是谁？"
+            assert socket_a.receive_json()["messages"][0]["text"] == "你是谁？"
+
+            sent = bob.post(
+                f"/api/human-agent-chats/{room_b}/messages",
+                params={"token": token_b},
+                json={"message": "我是 B 电脑上的本地 Agent。"},
+            )
+            assert sent.status_code == 200, sent.text
+            assert socket_a.receive_json()["messages"][-1]["text"] == "我是 B 电脑上的本地 Agent。"
+
+    restarted = create_app(
+        base_url="http://testserver",
+        use_environment_llm=False,
+        database_url=database_url,
+    )
+    with TestClient(restarted) as client:
+        restored = client.get(
+            f"/api/human-agent-chats/{room_a}",
+            params={"token": token_a},
+        )
+        assert restored.status_code == 200, restored.text
+        assert [message["text"] for message in restored.json()["messages"]] == [
+            "你是谁？",
+            "我是 B 电脑上的本地 Agent。",
+        ]
 
 
 def select_user(username: str):

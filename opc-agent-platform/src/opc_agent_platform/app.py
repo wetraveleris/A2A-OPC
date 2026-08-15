@@ -37,6 +37,7 @@ from .models import (
     HumanChatStartRequest,
     HumanChatStopRequest,
     HumanChatSwitchModeRequest,
+    HumanChatState,
     HumanChatView,
     CreateScreeningRequest,
     DecisionRequest,
@@ -103,14 +104,14 @@ def create_app(
         store=employee_chat_store,
         communicator=communicator,
     )
-    human_chat_store = HumanChatStore()
+    database = Database(database_url)
+    database.create_schema()
+    human_chat_store = HumanChatStore(database)
     human_chat_service = HumanChatService(
         store=human_chat_store,
         communicator=communicator,
         relay_hub=relay_hub,
     )
-    database = Database(database_url)
-    database.create_schema()
     account_service = AccountService(database)
     agent_network_service = AgentNetworkService(
         database=database,
@@ -289,6 +290,37 @@ def create_app(
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.websocket("/api/human-agent-chats/{conversation_id}/ws")
+    async def websocket_human_agent_chat(websocket: WebSocket, conversation_id: str) -> None:
+        token = websocket.query_params.get("token", "")
+        try:
+            human_chat_service.view(conversation_id, token)
+        except KeyError:
+            await websocket.close(code=4404, reason="Conversation not found")
+            return
+        except PermissionError:
+            await websocket.close(code=4403, reason="Invalid participant token")
+            return
+        await websocket.accept()
+        version = -1
+        try:
+            while True:
+                current = human_chat_service.view(conversation_id, token)
+                if current.version != version:
+                    await websocket.send_json(
+                        current.model_dump(mode="json", by_alias=True)
+                    )
+                    version = current.version
+                if current.state in {
+                    HumanChatState.COMPLETED,
+                    HumanChatState.REJECTED,
+                    HumanChatState.FAILED,
+                }:
+                    return
+                await human_chat_store.wait_for_change(conversation_id, version)
+        except WebSocketDisconnect:
+            return
 
     @app.post(
         "/api/human-agent-chats/{conversation_id}/approve",
