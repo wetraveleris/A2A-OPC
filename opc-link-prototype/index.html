@@ -409,6 +409,10 @@
     @keyframes agent-pulse { to { opacity: .25; transform: translateY(-50%) scale(.72); } }
     .agent-loading h2 { margin: 0 0 9px; font-size: 24px; font-weight: 650; }
     .agent-loading p { margin: 0; color: var(--muted); font-size: 13px; }
+    .agent-progress-list { width: min(100%, 420px); margin-top: 24px; text-align: left; display: grid; gap: 8px; }
+    .agent-progress-item { padding: 11px 0; border-top: 1px solid var(--line); }
+    .agent-progress-item b { display: block; margin-bottom: 4px; font-size: 11px; color: #596a2d; }
+    .agent-progress-item span { display: block; color: var(--ink); font-size: 12px; line-height: 1.5; }
     #connectView.running .agent-loading { display: flex; }
     #connectView.running #connectResult, #connectView.running #connectDecision { display: none; }
     #connectView.empty .finding, #connectView.empty #transcriptButton, #connectView.empty .disclosure, #connectView.empty #connectDecision { display: none; }
@@ -778,8 +782,9 @@
           <div class="scroll">
             <section class="agent-loading" id="agentLoading" aria-live="polite">
               <div class="agent-loading-mark" aria-hidden="true"></div>
-              <h2>Agent 正在了解</h2>
+              <h2 id="agentLoadingTitle">Agent 正在了解</h2>
               <p id="agentLoadingText">核对方向、能力与合作边界</p>
+              <div class="agent-progress-list" id="agentProgressList"></div>
             </section>
             <div id="connectResult">
               <section class="connect-summary">
@@ -1023,6 +1028,8 @@
     let appReady = false;
     let roomCreating = false;
     let screeningRunning = false;
+    let introductionPollTimer = null;
+    let introductionPollBusy = false;
     let lastCardStepAt = 0;
     const $ = (id) => document.getElementById(id);
     const statusbar = $("statusbar");
@@ -1447,11 +1454,116 @@
       $("connectTitle").textContent = candidate.networkAgent ? "双方 Agent 正在初聊" : candidate.profileId ? "Agent 正在了解" : "Agent 正在沟通";
       $("connectSubtitle").textContent = `正在了解 ${candidate.name}`;
       $("connectRound").textContent = candidate.networkAgent ? "A2A 1.0" : candidate.profileId ? "公开资料" : "A2A";
+      $("agentLoadingTitle").textContent = "Agent 正在了解";
       $("agentLoadingText").textContent = candidate.networkAgent
         ? "正在通过公网 Relay 执行 3 个真实 A2A Task"
         : candidate.profileId
         ? "读取公开资料、作品和协作偏好"
         : "核对方向、能力与合作边界";
+      $("agentProgressList").replaceChildren();
+    }
+
+    function introductionStorageKey() {
+      return currentUser ? `opc-active-introduction:${currentUser.id}` : "opc-active-introduction";
+    }
+
+    function renderIntroductionProgress(introduction) {
+      const view = $("connectView");
+      const completed = introduction.completedTasks ?? introduction.transcript?.length ?? 0;
+      view.classList.remove("empty");
+      view.classList.add("running");
+      $("connectTitle").textContent = "双方 Agent 正在了解";
+      $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName}`;
+      $("connectRound").textContent = `${completed} / ${introduction.totalTasks || 3} 个 Task`;
+      $("agentLoadingTitle").textContent = completed ? `已完成第 ${completed} 轮` : "正在建立 A2A 会话";
+      const checkedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      $("agentLoadingText").textContent = completed
+        ? `第 ${completed} 轮已保存 · ${checkedAt} 已检查下一轮`
+        : `等待第一台电脑的本地模型返回 · ${checkedAt} 已检查`;
+      const turns = introduction.transcript || [];
+      $("agentProgressList").replaceChildren(...turns.map(turn => {
+        const item = document.createElement("div");
+        item.className = "agent-progress-item";
+        const state = document.createElement("b");
+        state.textContent = `第 ${turn.round} 轮 · ${turn.taskState.replace("TASK_STATE_", "")}`;
+        const message = document.createElement("span");
+        message.textContent = turn.response.shortMessage || turn.response.summary || "本轮 A2A Task 已完成。";
+        item.append(state, message);
+        return item;
+      }));
+    }
+
+    function stopIntroductionPolling({ clearStored = false } = {}) {
+      clearInterval(introductionPollTimer);
+      introductionPollTimer = null;
+      introductionPollBusy = false;
+      if (clearStored) localStorage.removeItem(introductionStorageKey());
+    }
+
+    async function refreshIntroduction(introductionId) {
+      if (introductionPollBusy) return;
+      introductionPollBusy = true;
+      try {
+        const introduction = await apiJson(`/api/agent-introductions/${introductionId}`);
+        currentScreening = { kind: "AGENT_INTRODUCTION", introduction };
+        if (introduction.state === "RUNNING") {
+          screeningRunning = true;
+          if ($("connectView").classList.contains("active")) renderIntroductionProgress(introduction);
+          return;
+        }
+        screeningRunning = false;
+        stopIntroductionPolling({ clearStored: introduction.state !== "WAITING_APPROVAL" });
+        if (introduction.state === "FAILED") {
+          setScreeningError(introduction.error || "A2A 沟通失败");
+          return;
+        }
+        renderConnect();
+        showToast("双方 Agent 已完成初步了解");
+      } catch (error) {
+        stopIntroductionPolling();
+        setScreeningError(error.message || "进度读取失败");
+      } finally {
+        introductionPollBusy = false;
+      }
+    }
+
+    function watchIntroduction(introduction, { navigate = true } = {}) {
+      stopIntroductionPolling();
+      currentScreening = { kind: "AGENT_INTRODUCTION", introduction };
+      screeningCandidate = candidates.find(item => item.agentId === introduction.targetAgentId) || {
+        name: introduction.targetName,
+        agentId: introduction.targetAgentId,
+        networkAgent: true
+      };
+      localStorage.setItem(introductionStorageKey(), introduction.id);
+      screeningRunning = introduction.state === "RUNNING";
+      if (navigate) go("connect");
+      if (screeningRunning) {
+        renderIntroductionProgress(introduction);
+        introductionPollTimer = setInterval(() => refreshIntroduction(introduction.id), 1500);
+        refreshIntroduction(introduction.id);
+      } else if (introduction.state === "FAILED") {
+        setScreeningError(introduction.error || "A2A 沟通失败");
+      } else {
+        renderConnect();
+      }
+    }
+
+    async function restoreLatestIntroduction() {
+      try {
+        const storedId = localStorage.getItem(introductionStorageKey());
+        let introduction = null;
+        if (storedId) {
+          introduction = await apiJson(`/api/agent-introductions/${storedId}`).catch(() => null);
+        }
+        if (!introduction || !["RUNNING", "WAITING_APPROVAL"].includes(introduction.state)) {
+          const introductions = await apiJson("/api/agent-introductions");
+          introduction = introductions.find(item => item.isInitiator && ["RUNNING", "WAITING_APPROVAL"].includes(item.state));
+        }
+        if (introduction) watchIntroduction(introduction);
+      } catch (error) {
+        showToast("暂时无法恢复上次 Agent 沟通");
+      }
     }
 
     function setScreeningError(message) {
@@ -1490,8 +1602,7 @@
               goal: "请双方介绍自己、了解能力与需求，并判断是否值得建立联系。"
             })
           });
-          currentScreening = { kind: "AGENT_INTRODUCTION", introduction };
-          renderConnect();
+          watchIntroduction(introduction, { navigate: false });
           return;
         }
         if (screeningCandidate.profileId) {
@@ -1517,7 +1628,9 @@
       } catch (error) {
         setScreeningError(error.message || "网络连接失败");
       } finally {
-        screeningRunning = false;
+        if (currentScreening?.kind !== "AGENT_INTRODUCTION" || currentScreening.introduction.state !== "RUNNING") {
+          screeningRunning = false;
+        }
       }
     }
 
@@ -1856,7 +1969,13 @@
       $("reasonSheet").classList.remove("open");
       $("transcriptSheet").classList.remove("open");
       if (viewName === "profile") renderProfile();
-      if (viewName === "connect") screeningRunning ? setScreeningLoading(screeningCandidate) : renderConnect();
+      if (viewName === "connect") {
+        if (currentScreening?.kind === "AGENT_INTRODUCTION" && currentScreening.introduction.state === "RUNNING") {
+          renderIntroductionProgress(currentScreening.introduction);
+        } else {
+          screeningRunning ? setScreeningLoading(screeningCandidate) : renderConnect();
+        }
+      }
       if (viewName === "internet") {
         loadInternetTarget().catch(error => {
           $("internetError").textContent = error.message || "公网 Agent 发现失败";
@@ -1946,6 +2065,11 @@
       try {
         if (currentScreening.kind === "AGENT_INTRODUCTION") {
           if (decision === "decline") {
+            await apiJson(
+              `/api/agent-introductions/${currentScreening.introduction.id}/dismiss`,
+              { method: "POST" }
+            );
+            stopIntroductionPolling({ clearStored: true });
             showToast("已结束本次了解，不会建立联系人");
             setTimeout(() => go("discover"), 500);
             return;
@@ -1955,6 +2079,7 @@
             { method: "POST" }
           );
           currentScreening.introduction = introduction;
+          stopIntroductionPolling({ clearStored: true });
           renderConnect();
           await Promise.all([loadDiscoveryFeed(), loadConnections()]);
           showToast("联系人请求已发送，等待对方本人接受");
@@ -2040,9 +2165,13 @@
           body: JSON.stringify(payload)
         });
         $("authForm").reset();
+        stopIntroductionPolling();
+        currentScreening = null;
+        screeningCandidate = null;
         hideAuth(profile);
         await Promise.all([loadMySpace(), loadDiscoveryFeed()]);
-        go("discover");
+        await restoreLatestIntroduction();
+        if (!currentScreening) go("discover");
       } catch (error) {
         $("authError").textContent = error.message;
       } finally {
@@ -2133,11 +2262,15 @@
     });
     $("logoutButton").addEventListener("click", async () => {
       try { await apiJson("/api/auth/logout", { method: "POST" }); } catch (error) { /* local state still clears */ }
+      stopIntroductionPolling();
       currentUser = null;
       currentProfile = null;
       currentWorks = [];
       agentDeviceOptions = [];
       myAgentDevice = null;
+      currentScreening = null;
+      screeningCandidate = null;
+      screeningRunning = false;
       showAuth();
     });
     $("discoverView").addEventListener("click", e => {
@@ -2150,6 +2283,7 @@
         const profile = await apiJson("/api/auth/me");
         hideAuth(profile);
         await Promise.all([loadMySpace(), loadDiscoveryFeed()]);
+        await restoreLatestIntroduction();
       } catch (error) {
         showAuth();
       }

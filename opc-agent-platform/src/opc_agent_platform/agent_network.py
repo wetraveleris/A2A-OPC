@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime
 
 from pydantic import Field
@@ -17,9 +19,10 @@ from .database import (
     FriendRequest,
     User,
     UserProfile,
+    new_id,
     utc_now,
 )
-from .models import AIUsage, APIModel, AgentProfile
+from .models import AIUsage, APIModel, AgentProfile, ScreeningRecord, ScreeningState
 from .profiles import PROFILES, get_profile
 from .relay import RelayHub
 
@@ -79,6 +82,10 @@ class AgentIntroductionView(APIModel):
     relation_state: str
     report: dict[str, object]
     transcript: list[dict[str, object]]
+    completed_tasks: int
+    total_tasks: int = 3
+    error: str | None = None
+    is_initiator: bool
     friend_request_id: str | None
     created_at: datetime
 
@@ -95,6 +102,7 @@ class AgentNetworkService:
         self.relay_hub = relay_hub
         self.screening_service = screening_service
         self.account_service = account_service
+        self._jobs: dict[str, asyncio.Task[None]] = {}
 
     @staticmethod
     def _public_user(user: User) -> PublicUserView:
@@ -308,11 +316,11 @@ class AgentNetworkService:
                 return device
         raise ValueError("Bind and start your local runtime node first")
 
-    async def create_introduction(
+    def prepare_introduction(
         self,
         user_id: str,
         request: AgentIntroductionCreate,
-    ) -> AgentIntroductionView:
+    ) -> tuple[AgentIntroductionView, bool]:
         target_agent_id = request.target_agent_id.strip()
         with self.database.session() as session:
             source = self._source_device(session, user_id)
@@ -333,52 +341,157 @@ class AgentNetworkService:
                 raise ValueError("Both Agent owners must have an active profile")
             target_user_id = target.user_id
             source_agent_id = str(source.agent_id)
-            source_profile = self._owner_agent_profile(
-                source_user,
-                source_owner_profile,
-                source_agent_id,
+            existing = session.scalar(
+                select(AgentIntroduction)
+                .where(
+                    AgentIntroduction.initiator_user_id == user_id,
+                    AgentIntroduction.target_user_id == target_user_id,
+                    AgentIntroduction.state.in_(["RUNNING", "WAITING_APPROVAL"]),
+                )
+                .order_by(AgentIntroduction.created_at.desc())
             )
-            target_profile = self._owner_agent_profile(
-                target_user,
-                target_owner_profile,
-                target_agent_id,
-            )
+            if existing:
+                return self._introduction_view(session, existing, user_id), False
 
-        screening = await self.screening_service.start(
-            source_agent_id,
-            target_agent_id,
-            use_relay=True,
-            source_profile=source_profile,
-            target_profile=target_profile,
-        )
+        introduction_id = new_id()
         record = AgentIntroduction(
+            id=introduction_id,
             initiator_user_id=user_id,
             target_user_id=target_user_id,
             source_agent_id=source_agent_id,
             target_agent_id=target_agent_id,
-            screening_id=screening.id,
+            screening_id=introduction_id,
             goal=request.goal.strip(),
-            report=(
-                screening.report.model_dump(mode="json", by_alias=True)
-                if screening.report
-                else {}
-            ),
-            transcript=[
-                turn.model_dump(mode="json", by_alias=True)
-                for turn in screening.transcript
-            ],
+            state="RUNNING",
+            report={},
+            transcript=[],
         )
         with self.database.session() as session:
             session.add(record)
             session.commit()
             session.refresh(record)
-            return self._introduction_view(session, record, user_id)
+            return self._introduction_view(session, record, user_id), True
+
+    async def start_introduction(
+        self,
+        user_id: str,
+        request: AgentIntroductionCreate,
+    ) -> AgentIntroductionView:
+        view, should_start = self.prepare_introduction(user_id, request)
+        if should_start:
+            task = asyncio.create_task(self._run_introduction(view.id))
+            self._jobs[view.id] = task
+            task.add_done_callback(lambda _: self._jobs.pop(view.id, None))
+        return view
+
+    async def _persist_screening_progress(
+        self,
+        introduction_id: str,
+        screening: ScreeningRecord,
+    ) -> None:
+        with self.database.session() as session:
+            record = session.get(AgentIntroduction, introduction_id)
+            if record is None:
+                return
+            record.transcript = [
+                turn.model_dump(mode="json", by_alias=True)
+                for turn in screening.transcript
+            ]
+            if screening.report:
+                record.report = screening.report.model_dump(
+                    mode="json", by_alias=True
+                )
+            if screening.state == ScreeningState.FAILED:
+                record.state = "FAILED"
+                record.report = {**dict(record.report or {}), "error": screening.error or "A2A introduction failed"}
+            elif screening.state == ScreeningState.WAITING_OWNER_APPROVAL:
+                record.state = "WAITING_APPROVAL"
+            else:
+                record.state = "RUNNING"
+            record.updated_at = utc_now()
+            session.commit()
+
+    async def _run_introduction(self, introduction_id: str) -> None:
+        with self.database.session() as session:
+            record = session.get(AgentIntroduction, introduction_id)
+            if record is None or record.state != "RUNNING":
+                return
+            source_user = session.get(User, record.initiator_user_id)
+            target_user = session.get(User, record.target_user_id)
+            source_owner_profile = session.get(UserProfile, record.initiator_user_id)
+            target_owner_profile = session.get(UserProfile, record.target_user_id)
+            if not all(
+                (source_user, target_user, source_owner_profile, target_owner_profile)
+            ):
+                record.state = "FAILED"
+                record.report = {"error": "Both Agent owners must have an active profile"}
+                session.commit()
+                return
+            source_profile = self._owner_agent_profile(
+                source_user,
+                source_owner_profile,
+                record.source_agent_id,
+            )
+            target_profile = self._owner_agent_profile(
+                target_user,
+                target_owner_profile,
+                record.target_agent_id,
+            )
+            source_agent_id = record.source_agent_id
+            target_agent_id = record.target_agent_id
+            screening_id = record.screening_id
+
+        async def persist(screening: ScreeningRecord) -> None:
+            await self._persist_screening_progress(introduction_id, screening)
+
+        try:
+            await self.screening_service.start(
+                source_agent_id,
+                target_agent_id,
+                use_relay=True,
+                source_profile=source_profile,
+                target_profile=target_profile,
+                screening_id=screening_id,
+                progress_callback=persist,
+            )
+        except Exception as exc:
+            with self.database.session() as session:
+                record = session.get(AgentIntroduction, introduction_id)
+                if record and record.state != "FAILED":
+                    record.state = "FAILED"
+                    record.report = {**dict(record.report or {}), "error": str(exc)}
+                    record.updated_at = utc_now()
+                    session.commit()
+
+    def list_introductions(
+        self,
+        user_id: str,
+        limit: int = 20,
+    ) -> list[AgentIntroductionView]:
+        with self.database.session() as session:
+            records = session.scalars(
+                select(AgentIntroduction)
+                .where(
+                    or_(
+                        AgentIntroduction.initiator_user_id == user_id,
+                        AgentIntroduction.target_user_id == user_id,
+                    )
+                )
+                .order_by(AgentIntroduction.created_at.desc())
+                .limit(limit)
+            ).all()
+            return [
+                self._introduction_view(session, record, user_id)
+                for record in records
+            ]
 
     def request_contact(self, user_id: str, introduction_id: str) -> AgentIntroductionView:
         with self.database.session() as session:
             record = session.get(AgentIntroduction, introduction_id)
             if record is None or record.initiator_user_id != user_id:
                 raise KeyError("Agent introduction not found")
+            if record.state != "WAITING_APPROVAL" or len(record.transcript or []) < 3:
+                raise ValueError("Agent introduction is not complete")
             target = session.get(User, record.target_user_id)
             if target is None:
                 raise KeyError("Target owner not found")
@@ -412,6 +525,23 @@ class AgentNetworkService:
                 raise KeyError("Agent introduction not found")
             return self._introduction_view(session, record, user_id)
 
+    def dismiss_introduction(
+        self,
+        user_id: str,
+        introduction_id: str,
+    ) -> AgentIntroductionView:
+        with self.database.session() as session:
+            record = session.get(AgentIntroduction, introduction_id)
+            if record is None or record.initiator_user_id != user_id:
+                raise KeyError("Agent introduction not found")
+            if record.state == "CONTACT_REQUESTED":
+                raise ValueError("A contact request has already been sent")
+            record.state = "DECLINED"
+            record.updated_at = utc_now()
+            session.commit()
+            session.refresh(record)
+            return self._introduction_view(session, record, user_id)
+
     def _introduction_view(
         self,
         session,
@@ -420,6 +550,8 @@ class AgentNetworkService:
     ) -> AgentIntroductionView:
         source_user = session.get(User, record.initiator_user_id)
         target_user = session.get(User, record.target_user_id)
+        report = dict(record.report or {})
+        transcript = list(record.transcript or [])
         return AgentIntroductionView(
             id=record.id,
             screening_id=record.screening_id,
@@ -444,8 +576,11 @@ class AgentNetworkService:
                 if viewer_id == record.initiator_user_id
                 else record.initiator_user_id,
             ),
-            report=dict(record.report or {}),
-            transcript=list(record.transcript or []),
+            report=report,
+            transcript=transcript,
+            completed_tasks=len(transcript),
+            error=str(report.get("error")) if report.get("error") else None,
+            is_initiator=viewer_id == record.initiator_user_id,
             friend_request_id=record.friend_request_id,
             created_at=record.created_at,
         )

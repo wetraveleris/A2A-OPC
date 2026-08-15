@@ -63,13 +63,22 @@ async def create_agent_introduction(
 ) -> AgentIntroductionView:
     user = _user(request)
     try:
-        return await _service(request).create_introduction(user.id, payload)
+        return await _service(request).start_introduction(user.id, payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"A2A introduction failed: {exc}") from exc
+
+
+@router.get(
+    "/agent-introductions",
+    response_model=list[AgentIntroductionView],
+)
+def list_agent_introductions(request: Request) -> list[AgentIntroductionView]:
+    user = _user(request)
+    return _service(request).list_introductions(user.id)
 
 
 @router.get(
@@ -98,6 +107,23 @@ def request_agent_contact(
     user = _user(request)
     try:
         return _service(request).request_contact(user.id, introduction_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/agent-introductions/{introduction_id}/dismiss",
+    response_model=AgentIntroductionView,
+)
+def dismiss_agent_introduction(
+    introduction_id: str,
+    request: Request,
+) -> AgentIntroductionView:
+    user = _user(request)
+    try:
+        return _service(request).dismiss_introduction(user.id, introduction_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

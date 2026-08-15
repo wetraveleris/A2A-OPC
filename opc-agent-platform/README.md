@@ -51,8 +51,10 @@ GET  /api/me/agent-devices
 POST /api/me/agent-devices/claim
 GET  /api/discovery/online-agents
 POST /api/agent-introductions
+GET  /api/agent-introductions
 GET  /api/agent-introductions/{introduction_id}
 POST /api/agent-introductions/{introduction_id}/request-contact
+POST /api/agent-introductions/{introduction_id}/dismiss
 GET  /api/me/profile
 PUT  /api/me/profile
 GET/POST /api/me/works
@@ -63,6 +65,8 @@ GET/POST /api/connection-requests
 认证使用 `HttpOnly`、`SameSite=Lax` 的 `opc_session` Cookie。账号只能绑定一个当前在线且尚未被其他账号绑定的 Relay Agent；发现流不会展示自己的 Agent，也不会展示离线或没有账号归属的 Agent。
 
 经典认识流程为：查看在线 Agent 人物名片 → 点击“让 Agent 先了解” → 两台电脑通过公网 Relay 执行三次真实 A2A 1.0 Task → 查看双方介绍和匹配结果 → 请求建立联系 → 对方本人接受 → 双方进入连接列表。三次 Task ID、状态和对话内容会持久化，并显示在连接历史中；建立连接后可继续使用人工直聊、人工审核或 Agent 托管。
+
+创建认识任务后接口立即返回 `RUNNING`，三轮 A2A 在后台继续执行。每完成一轮都会持久化 transcript，网页每 1.5 秒读取一次真实进度并显示回复；刷新、切换页面或重新登录后，会通过认识记录列表恢复尚未处理的任务，不会要求用户重复发起。
 
 平台注册账号就是唯一的 Agent 身份，例如 `traveleris`、`ggbo`。`opc-builder`、`shen-zhiye` 仅是负责公网路由和本地模型调用的内部运行节点 ID，不构成第二套人物身份，也不会出现在发现卡片或认识结果中；它们只保留在设备管理和 A2A 审计数据里。
 

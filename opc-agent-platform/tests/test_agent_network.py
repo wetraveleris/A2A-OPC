@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -33,7 +35,16 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         for agent_id in agent_ids
     ]
 
+    dispatch_started = [asyncio.Event() for _ in range(3)]
+    dispatch_release = [asyncio.Event() for _ in range(3)]
+    dispatch_count = 0
+
     async def dispatch(agent_id, payload):
+        nonlocal dispatch_count
+        index = dispatch_count
+        dispatch_count += 1
+        dispatch_started[index].set()
+        await dispatch_release[index].wait()
         return await communicator.send(agent_id, payload)
 
     relay_hub.dispatch = dispatch
@@ -86,9 +97,42 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         )
         assert introduced.status_code == 201, introduced.text
         introduction = introduced.json()
-        assert introduction["state"] == "WAITING_APPROVAL"
+        assert introduction["state"] == "RUNNING"
         assert introduction["sourceName"] == "Alice"
         assert introduction["targetName"] == "Bob"
+        assert introduction["completedTasks"] == 0
+
+        await asyncio.wait_for(dispatch_started[0].wait(), timeout=1)
+        running = await alice.get(
+            f"/api/agent-introductions/{introduction['id']}"
+        )
+        assert running.json()["completedTasks"] == 0
+
+        dispatch_release[0].set()
+        await asyncio.wait_for(dispatch_started[1].wait(), timeout=1)
+        first_round = await alice.get(
+            f"/api/agent-introductions/{introduction['id']}"
+        )
+        assert first_round.json()["completedTasks"] == 1
+
+        dispatch_release[1].set()
+        await asyncio.wait_for(dispatch_started[2].wait(), timeout=1)
+        second_round = await alice.get(
+            f"/api/agent-introductions/{introduction['id']}"
+        )
+        assert second_round.json()["completedTasks"] == 2
+
+        dispatch_release[2].set()
+        for _ in range(100):
+            completed = await alice.get(
+                f"/api/agent-introductions/{introduction['id']}"
+            )
+            introduction = completed.json()
+            if introduction["state"] == "WAITING_APPROVAL":
+                break
+            await asyncio.sleep(0.01)
+        assert introduction["state"] == "WAITING_APPROVAL"
+        assert introduction["completedTasks"] == 3
         assert len(introduction["transcript"]) == 3
         assert len(
             {turn["taskId"] for turn in introduction["transcript"]}
@@ -101,6 +145,11 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
             turn["request"]["recipientProfile"]["name"]
             for turn in introduction["transcript"]
         } == {"Alice", "Bob"}
+
+        restored = await alice.get("/api/agent-introductions")
+        assert restored.status_code == 200
+        assert restored.json()[0]["id"] == introduction["id"]
+        assert restored.json()[0]["completedTasks"] == 3
         assert {
             turn["response"]["disclosedProfile"]["name"]
             for turn in introduction["transcript"]

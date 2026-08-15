@@ -18,9 +18,14 @@ class ScreeningStore:
         self._records: dict[str, ScreeningRecord] = {}
         self._lock = asyncio.Lock()
 
-    async def create(self, from_agent_id: str, to_agent_id: str) -> ScreeningRecord:
+    async def create(
+        self,
+        from_agent_id: str,
+        to_agent_id: str,
+        screening_id: str | None = None,
+    ) -> ScreeningRecord:
         record = ScreeningRecord(
-            id=str(uuid4()),
+            id=screening_id or str(uuid4()),
             from_agent_id=from_agent_id,
             to_agent_id=to_agent_id,
             state=ScreeningState.CREATED,

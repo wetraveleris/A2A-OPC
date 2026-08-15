@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -309,6 +309,8 @@ class ScreeningService:
         use_relay: bool = False,
         source_profile: AgentProfile | None = None,
         target_profile: AgentProfile | None = None,
+        screening_id: str | None = None,
+        progress_callback: Callable[[ScreeningRecord], Awaitable[None]] | None = None,
     ) -> ScreeningRecord:
         source = source_profile or get_profile(from_agent_id)
         target = target_profile or get_profile(to_agent_id)
@@ -327,8 +329,10 @@ class ScreeningService:
             if offline:
                 raise ValueError(f"Relay Agent offline: {', '.join(offline)}")
 
-        record = await self.store.create(source.id, target.id)
+        record = await self.store.create(source.id, target.id, screening_id)
         await self.store.set_state(record.id, ScreeningState.SCREENING)
+        if progress_callback:
+            await progress_callback(await self.store.get(record.id))
         try:
             first_request = self._request(
                 record.id,
@@ -342,6 +346,8 @@ class ScreeningService:
             first_response = await self._exchange(
                 record.id, first_request, use_relay=use_relay
             )
+            if progress_callback:
+                await progress_callback(await self.store.get(record.id))
 
             second_request = self._request(
                 record.id,
@@ -356,6 +362,8 @@ class ScreeningService:
             second_response = await self._exchange(
                 record.id, second_request, use_relay=use_relay
             )
+            if progress_callback:
+                await progress_callback(await self.store.get(record.id))
 
             third_request = self._request(
                 record.id,
@@ -368,6 +376,8 @@ class ScreeningService:
                 second_response,
             )
             await self._exchange(record.id, third_request, use_relay=use_relay)
+            if progress_callback:
+                await progress_callback(await self.store.get(record.id))
 
             completed = await self.store.get(record.id)
             baseline = analyze_pair(source, target)
@@ -399,15 +409,20 @@ class ScreeningService:
             report.evidence_task_ids = [turn.task_id for turn in completed.transcript]
             await self.store.set_report(record.id, report)
             await self.store.set_state(record.id, ScreeningState.REPORT_GENERATED)
-            return await self.store.set_state(
+            completed_record = await self.store.set_state(
                 record.id, ScreeningState.WAITING_OWNER_APPROVAL
             )
+            if progress_callback:
+                await progress_callback(completed_record)
+            return completed_record
         except Exception as exc:
-            await self.store.set_state(
+            failed_record = await self.store.set_state(
                 record.id,
                 ScreeningState.FAILED,
                 error=str(exc),
             )
+            if progress_callback:
+                await progress_callback(failed_record)
             raise
 
     async def _exchange(

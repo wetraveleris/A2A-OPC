@@ -74,7 +74,8 @@ test('online Agent card creates an A2A introduction and contact history', async 
       commonGround: ['都在服务小团队'], complementarity: ['产品与工程互补'],
       risks: [], unconfirmed: ['确认首次合作范围']
     },
-    transcript: turns, friendRequestId: null,
+    transcript: turns, completedTasks: 3, totalTasks: 3, error: null,
+    isInitiator: true, friendRequestId: null,
     createdAt: new Date().toISOString()
   };
 
@@ -85,9 +86,27 @@ test('online Agent card creates an A2A introduction and contact history', async 
   await page.route('**/api/discovery/online-agents', route => route.fulfill({ json: [
     { agentId: 'shen-zhiye', name: '目标用户', role: 'Agent 工程师', city: '杭州', projectSummary: '帮助小团队接入本地模型。', offers: ['Agent 接入'], needs: ['产品反馈'], collaborationStyle: '异步优先', online: true, provider: 'ollama', model: 'qwen3:1.7b', owner: { id: 'user-b', username: 'target-agent', displayName: '目标用户' }, relationState: 'NONE' }
   ] }));
+  let latestIntroduction = { ...introduction, state: 'RUNNING', transcript: [], completedTasks: 0 };
+  let introductionStarted = false;
   await page.route('**/api/agent-introductions', async route => {
-    if (route.request().method() === 'POST') await route.fulfill({ status: 201, json: introduction });
-    else await route.fallback();
+    if (route.request().method() === 'POST') {
+      introductionStarted = true;
+      await route.fulfill({ status: 201, json: latestIntroduction });
+    } else {
+      await route.fulfill({ json: introductionStarted ? [latestIntroduction] : [] });
+    }
+  });
+  let introductionPoll = 0;
+  await page.route('**/api/agent-introductions/intro-1', route => {
+    introductionPoll += 1;
+    const completedTasks = Math.min(introductionPoll, 3);
+    latestIntroduction = {
+      ...introduction,
+      state: completedTasks === 3 ? 'WAITING_APPROVAL' : 'RUNNING',
+      transcript: turns.slice(0, completedTasks),
+      completedTasks
+    };
+    route.fulfill({ json: latestIntroduction });
   });
   await page.route('**/api/agent-introductions/intro-1/request-contact', route => route.fulfill({
     json: { ...introduction, state: 'CONTACT_REQUESTED', relationState: 'PENDING_OUTGOING', friendRequestId: 'request-1' }
@@ -114,10 +133,16 @@ test('online Agent card creates an A2A introduction and contact history', async 
 
   await page.locator('#agentButton').click();
   await expect(page.locator('#connectView')).toHaveClass(/active/);
+  await expect(page.locator('#agentProgressList')).toContainText('第 1 轮');
+  await expect(page.locator('#connectRound')).toContainText('/ 3 个 Task');
   await expect(page.locator('#connectTitle')).toHaveText('双方 Agent 已完成初聊');
   await expect(page.locator('#connectDisclosure')).toContainText('A2A Task ID');
   await expect(page.locator('#connectRound')).toHaveText('3 个 Task');
   await expect(page.locator('#approveButton')).toHaveText('请求建立联系');
+  await page.reload();
+  await expect(page.locator('#connectView')).toHaveClass(/active/);
+  await expect(page.locator('#connectTitle')).toHaveText('双方 Agent 已完成初聊');
+  await expect(page.locator('#connectRound')).toHaveText('3 个 Task');
   await page.locator('#transcriptButton').click();
   await expect(page.locator('#transcriptList')).toContainText('task-a2a-3');
   await page.locator('#transcriptClose').click();
