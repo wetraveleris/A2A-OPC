@@ -26,7 +26,7 @@ from .relay import RelayHub
 
 class AgentDeviceClaimRequest(APIModel):
     agent_id: str = Field(min_length=1, max_length=100)
-    name: str = Field(default="本机 Agent", min_length=1, max_length=100)
+    name: str = Field(default="本机运行节点", min_length=1, max_length=100)
     platform: str = Field(default="desktop", min_length=1, max_length=50)
 
 
@@ -44,7 +44,6 @@ class AgentDeviceView(APIModel):
 
 class OnlineAgentCardView(APIModel):
     agent_id: str
-    agent_name: str
     name: str
     role: str
     city: str
@@ -75,8 +74,6 @@ class AgentIntroductionView(APIModel):
     target_agent_id: str
     source_name: str
     target_name: str
-    source_agent_name: str
-    target_agent_name: str
     goal: str
     state: str
     relation_state: str
@@ -167,7 +164,7 @@ class AgentNetworkService:
                     AgentDeviceView(
                         id=device.id if device else agent_id,
                         agent_id=agent_id,
-                        name=device.name if device else f"{get_profile(agent_id).name}的 Agent",
+                        name=device.name if device else f"运行节点 {agent_id}",
                         platform=device.platform if device else "desktop",
                         online=bool(status.get("online")),
                         provider=str(metadata.get("provider")) if metadata.get("provider") else None,
@@ -281,7 +278,6 @@ class AgentNetworkService:
                 cards.append(
                     OnlineAgentCardView(
                         agent_id=device.agent_id,
-                        agent_name=device.name,
                         name=owner.display_name,
                         role=owner_profile.role.strip() or "OPC 创作者",
                         city=owner_profile.city.strip() or "线上",
@@ -310,7 +306,7 @@ class AgentNetworkService:
         for device in devices:
             if device.agent_id and self.relay_hub.is_online(device.agent_id):
                 return device
-        raise ValueError("Bind and start your local Agent first")
+        raise ValueError("Bind and start your local runtime node first")
 
     async def create_introduction(
         self,
@@ -424,12 +420,6 @@ class AgentNetworkService:
     ) -> AgentIntroductionView:
         source_user = session.get(User, record.initiator_user_id)
         target_user = session.get(User, record.target_user_id)
-        source_device = session.scalar(
-            select(Device).where(Device.agent_id == record.source_agent_id)
-        )
-        target_device = session.scalar(
-            select(Device).where(Device.agent_id == record.target_agent_id)
-        )
         return AgentIntroductionView(
             id=record.id,
             screening_id=record.screening_id,
@@ -444,12 +434,6 @@ class AgentNetworkService:
                 target_user.display_name
                 if target_user
                 else get_profile(record.target_agent_id).name
-            ),
-            source_agent_name=(
-                source_device.name if source_device else record.source_agent_id
-            ),
-            target_agent_name=(
-                target_device.name if target_device else record.target_agent_id
             ),
             goal=record.goal,
             state=record.state,

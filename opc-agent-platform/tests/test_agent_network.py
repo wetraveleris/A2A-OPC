@@ -74,7 +74,6 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         assert discovery.status_code == 200, discovery.text
         assert [card["agentId"] for card in discovery.json()] == ["shen-zhiye"]
         assert discovery.json()[0]["name"] == "Bob"
-        assert discovery.json()[0]["agentName"] == "B computer"
         assert discovery.json()[0]["online"] is True
         assert discovery.json()[0]["model"] == "qwen3:1.7b"
 
@@ -90,8 +89,6 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         assert introduction["state"] == "WAITING_APPROVAL"
         assert introduction["sourceName"] == "Alice"
         assert introduction["targetName"] == "Bob"
-        assert introduction["sourceAgentName"] == "A computer"
-        assert introduction["targetAgentName"] == "B computer"
         assert len(introduction["transcript"]) == 3
         assert len(
             {turn["taskId"] for turn in introduction["transcript"]}

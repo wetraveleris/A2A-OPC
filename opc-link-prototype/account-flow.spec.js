@@ -67,7 +67,6 @@ test('online Agent card creates an A2A introduction and contact history', async 
     id: 'intro-1', screeningId: 'screening-1',
     sourceAgentId: 'opc-builder', targetAgentId: 'shen-zhiye',
     sourceName: '请求用户', targetName: '目标用户',
-    sourceAgentName: 'A computer', targetAgentName: 'B computer',
     goal: '请双方介绍自己并判断是否值得建立联系。',
     state: 'WAITING_APPROVAL', relationState: 'NONE',
     report: {
@@ -84,7 +83,7 @@ test('online Agent card creates an A2A introduction and contact history', async 
     { id: 'device-b', agentId: 'shen-zhiye', name: 'B computer', platform: 'desktop', online: true, provider: 'ollama', model: 'qwen3:1.7b', isMine: false, isClaimed: true }
   ] }));
   await page.route('**/api/discovery/online-agents', route => route.fulfill({ json: [
-    { agentId: 'shen-zhiye', agentName: 'B computer', name: '目标用户', role: 'Agent 工程师', city: '杭州', projectSummary: '帮助小团队接入本地模型。', offers: ['Agent 接入'], needs: ['产品反馈'], collaborationStyle: '异步优先', online: true, provider: 'ollama', model: 'qwen3:1.7b', owner: { id: 'user-b', username: 'target-agent', displayName: '目标用户' }, relationState: 'NONE' }
+    { agentId: 'shen-zhiye', name: '目标用户', role: 'Agent 工程师', city: '杭州', projectSummary: '帮助小团队接入本地模型。', offers: ['Agent 接入'], needs: ['产品反馈'], collaborationStyle: '异步优先', online: true, provider: 'ollama', model: 'qwen3:1.7b', owner: { id: 'user-b', username: 'target-agent', displayName: '目标用户' }, relationState: 'NONE' }
   ] }));
   await page.route('**/api/agent-introductions', async route => {
     if (route.request().method() === 'POST') await route.fulfill({ status: 201, json: introduction });

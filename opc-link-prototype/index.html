@@ -981,8 +981,8 @@
                 <p class="auth-error" id="profileError" role="alert"></p>
               </section>
             </form>
-            <section class="editor-section"><h2>本机 Agent</h2><p>绑定当前电脑正在运行的 Agent，才能通过公网发现和认识其他 Agent。</p>
-              <div class="device-bind"><select id="agentDeviceSelect" aria-label="选择本机在线 Agent"></select><button class="secondary" id="claimAgentButton" type="button">绑定</button></div>
+            <section class="editor-section"><h2>本机运行节点</h2><p>账号就是你的 Agent 身份；绑定当前电脑的运行节点，用本地模型接收和处理公网消息。</p>
+              <div class="device-bind"><select id="agentDeviceSelect" aria-label="选择本机在线运行节点"></select><button class="secondary" id="claimAgentButton" type="button">绑定</button></div>
               <p class="device-state" id="agentDeviceState">正在检查 Relay 在线节点</p>
             </section>
             <section class="editor-section"><h2>我的作品</h2><p>公开作品会出现在发现流，连接可见作品只对好友展示。</p><div class="work-list" id="workList"></div>
@@ -1110,7 +1110,6 @@
       return {
         id: item.agentId,
         agentId: item.agentId,
-        agentName: item.agentName,
         networkAgent: true,
         owner: item.owner,
         name: item.name,
@@ -1122,9 +1121,9 @@
         needs: item.needs?.join("、") || "开放认识",
         monogram: monogram(item.name),
         style: item.collaborationStyle || "协作方式待进一步了解。",
-        moment: `${item.agentName} · ${item.provider || "local"} / ${item.model || "unknown"}`,
+        moment: `本地模型 · ${item.provider || "local"} / ${item.model || "unknown"}`,
         reasons: [
-          ["实时在线", `${item.name}的代理设备“${item.agentName}”当前已连接公网 Relay。`],
+          ["实时在线", `${item.name}当前已通过本机运行节点连接公网 Relay。`],
           ["A2A 1.0", "初聊会在两台电脑之间产生可追溯的 A2A Task。"],
           ["协作方向", item.needs?.join("、") || "正在寻找协作机会"]
         ],
@@ -1159,7 +1158,7 @@
       $("claimAgentButton").textContent = myAgentDevice ? "已绑定" : "绑定";
       $("agentDeviceState").textContent = myAgentDevice
         ? `${myAgentDevice.name} 已连接 · ${myAgentDevice.provider || "local"} / ${myAgentDevice.model || "unknown"}`
-        : "尚未绑定本机 Agent；先启动 Relay Node，再在这里认领。";
+        : "尚未绑定本机运行节点；先启动 Relay Node，再在这里认领。";
       $("agentDeviceState").classList.toggle("online", Boolean(myAgentDevice?.online));
     }
 
@@ -1377,7 +1376,7 @@
           CONNECTED: "已经是联系人"
         };
         $("connectTitle").textContent = "双方 Agent 已完成初聊";
-        $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName} · 双方 Agent 代理`;
+        $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName}`;
         $("connectRound").textContent = `${introduction.transcript.length} 个 Task`;
         $("connectRecommendation").textContent = stateLabels[introduction.relationState] || "初聊完成";
         $("connectSummary").textContent = report.summary || "双方 Agent 已交换公开资料并完成初步了解。";
@@ -1472,7 +1471,7 @@
     async function startAgentScreening() {
       if (screeningRunning || !candidates.length) return;
       if (candidates[index].networkAgent && !myAgentDevice) {
-        showToast("请先绑定本机在线 Agent");
+        showToast("请先绑定本机在线运行节点");
         go("onboarding");
         return;
       }
@@ -1483,7 +1482,7 @@
       setScreeningLoading(screeningCandidate);
       try {
         if (screeningCandidate.networkAgent) {
-          if (!myAgentDevice) throw new Error("请先在“我的”绑定本机在线 Agent");
+          if (!myAgentDevice) throw new Error("请先在“我的”绑定本机在线运行节点");
           const introduction = await apiJson("/api/agent-introductions", {
             method: "POST",
             body: JSON.stringify({
@@ -2086,10 +2085,10 @@
       try {
         await apiJson("/api/me/agent-devices/claim", {
           method: "POST",
-          body: JSON.stringify({ agentId, name: "本机 Agent", platform: navigator.platform || "desktop" })
+          body: JSON.stringify({ agentId, name: "本机运行节点", platform: navigator.platform || "desktop" })
         });
         await Promise.all([loadAgentDevices(), loadDiscoveryFeed()]);
-        showToast("本机 Agent 已绑定，可以开始公网认识");
+        showToast("本机运行节点已绑定，可以开始公网认识");
       } catch (error) {
         $("profileError").textContent = error.message;
       } finally {
