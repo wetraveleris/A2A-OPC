@@ -707,7 +707,7 @@
             <button class="round-action" id="profileButton" aria-label="查看个人空间">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>
             </button>
-            <button class="round-action active" id="agentButton" aria-label="让 Agent 先聊">
+            <button class="round-action active" id="agentButton" aria-label="让 Agent 先了解">
               <svg viewBox="0 0 24 24"><path d="M5 18 3 21v-5a8 8 0 1 1 3 3"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>
             </button>
           </div>
@@ -722,7 +722,7 @@
             <h2>为什么值得了解</h2>
             <p class="sheet-intro">不是一个分数，而是三个可以验证的合作线索。</p>
             <div id="reasonList"></div>
-            <button class="primary" id="sheetAgentButton" style="width:100%; margin-top:10px;">让 Agent 先聊</button>
+            <button class="primary" id="sheetAgentButton" style="width:100%; margin-top:10px;">让 Agent 先了解</button>
           </aside>
         </main>
 
@@ -758,7 +758,7 @@
           <div class="scroll">
             <section class="agent-loading" id="agentLoading" aria-live="polite">
               <div class="agent-loading-mark" aria-hidden="true"></div>
-              <h2>双方 Agent 正在了解</h2>
+              <h2>Agent 正在了解</h2>
               <p id="agentLoadingText">核对方向、能力与合作边界</p>
             </section>
             <div id="connectResult">
@@ -811,7 +811,7 @@
             <section class="moment"><span class="moment-time">最近瞬间 · 2 天前</span><p id="profileMoment"></p></section>
           </div>
           <div class="decision-bar" style="grid-template-columns: 1fr;">
-            <button class="primary" id="profileAgentButton">让 Agent 先聊</button>
+            <button class="primary" id="profileAgentButton">让 Agent 先了解</button>
           </div>
         </main>
 
@@ -1118,13 +1118,18 @@
 
     function mapDiscoveryProfile(item, fallbackIndex) {
       const publicWork = item.works?.find(work => work.videoUrl) || item.works?.[0];
+      const relationSignals = {
+        PENDING_OUTGOING: "已请求认识",
+        PENDING_INCOMING: "对方想认识你",
+        CONNECTED: "已经连接"
+      };
       return {
         id: item.username,
         profileId: item.profileId,
         name: item.displayName,
         role: [item.role, item.city].filter(Boolean).join(" · ") || "OPC 创作者",
         city: item.city || "线上",
-        signal: item.works?.length ? "有作品可看" : "公开资料",
+        signal: relationSignals[item.relationState] || (item.works?.length ? "有作品可看" : "公开资料"),
         project: item.projectSummary || item.bio || "正在寻找新的协作可能。",
         offers: item.offers?.join("、") || "等待补充",
         needs: item.needs?.join("、") || "开放认识",
@@ -1140,7 +1145,8 @@
           ["作品线索", publicWork?.title || "可以先从个人项目开始了解。"],
           ["协作方向", item.needs?.join("、") || "正在寻找协作机会"]
         ],
-        questions: ["是否适合当前合作目标", "实际投入时间和协作边界"]
+        questions: ["是否适合当前合作目标", "实际投入时间和协作边界"],
+        relationState: item.relationState || "NONE"
       };
     }
 
@@ -1317,6 +1323,31 @@
     function renderConnect() {
       const view = $("connectView");
       view.classList.remove("running", "empty");
+      if (currentScreening?.kind === "DISCOVERY_ASSESSMENT") {
+        const assessment = currentScreening.assessment;
+        const stateLabels = {
+          NONE: "可以请求认识",
+          PENDING_OUTGOING: "等待对方接受",
+          PENDING_INCOMING: "对方已请求认识",
+          CONNECTED: "已经连接"
+        };
+        $("connectTitle").textContent = "Agent 已完成初步了解";
+        $("connectSubtitle").textContent = "你来决定是否发送认识请求";
+        $("connectRound").textContent = "公开资料";
+        $("connectRecommendation").textContent = stateLabels[assessment.relationState] || "可以继续了解";
+        $("connectSummary").textContent = assessment.summary;
+        $("connectDisclosure").textContent = "本次只分析你的资料与对方公开资料和作品，没有联系对方，也没有伪造 A2A 对话。";
+        renderList($("connectMatches"), [...assessment.commonGround, ...assessment.complementarity].slice(0, 4));
+        renderList($("connectQuestions"), assessment.questions);
+        $("transcriptButton").hidden = true;
+        $("approveButton").disabled = !assessment.canRequest && assessment.relationState !== "PENDING_INCOMING";
+        $("approveButton").textContent = assessment.relationState === "NONE"
+          ? "请求认识"
+          : assessment.relationState === "PENDING_INCOMING"
+            ? "处理对方请求"
+            : stateLabels[assessment.relationState];
+        return;
+      }
       if (!currentScreening || !currentScreening.report) {
         view.classList.add("empty");
         $("connectTitle").textContent = "Agent 连接";
@@ -1329,6 +1360,7 @@
       }
 
       const report = currentScreening.report;
+      $("transcriptButton").hidden = false;
       $("connectTitle").textContent = "Agent 已聊完";
       $("connectSubtitle").textContent = "你来决定是否认识";
       $("connectRound").textContent = `${currentScreening.transcript.length} 轮`;
@@ -1345,10 +1377,12 @@
       const view = $("connectView");
       view.classList.remove("empty");
       view.classList.add("running");
-      $("connectTitle").textContent = "Agent 正在沟通";
+      $("connectTitle").textContent = candidate.profileId ? "Agent 正在了解" : "Agent 正在沟通";
       $("connectSubtitle").textContent = `正在了解 ${candidate.name}`;
-      $("connectRound").textContent = "A2A";
-      $("agentLoadingText").textContent = "核对方向、能力与合作边界";
+      $("connectRound").textContent = candidate.profileId ? "公开资料" : "A2A";
+      $("agentLoadingText").textContent = candidate.profileId
+        ? "读取公开资料、作品和协作偏好"
+        : "核对方向、能力与合作边界";
     }
 
     function setScreeningError(message) {
@@ -1366,13 +1400,22 @@
     }
 
     async function startAgentScreening() {
-      if (screeningRunning) return;
+      if (screeningRunning || !candidates.length) return;
       screeningRunning = true;
       screeningCandidate = candidates[index];
       currentScreening = null;
       go("connect");
       setScreeningLoading(screeningCandidate);
       try {
+        if (screeningCandidate.profileId) {
+          const assessment = await apiJson(
+            "/api/discovery/" + screeningCandidate.profileId + "/assessment",
+            { method: "POST" }
+          );
+          currentScreening = { kind: "DISCOVERY_ASSESSMENT", assessment };
+          renderConnect();
+          return;
+        }
         const response = await fetch("/api/screenings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1815,6 +1858,32 @@
     async function decideScreening(decision) {
       if (!currentScreening) return;
       try {
+        if (currentScreening.kind === "DISCOVERY_ASSESSMENT") {
+          if (decision === "decline") {
+            showToast("已跳过，可以继续查看其他人");
+            setTimeout(() => go("discover"), 500);
+            return;
+          }
+          const assessment = currentScreening.assessment;
+          if (assessment.relationState === "PENDING_INCOMING") {
+            go("friends");
+            return;
+          }
+          if (!assessment.canRequest) return;
+          await apiJson("/api/connection-requests", {
+            method: "POST",
+            body: JSON.stringify({
+              targetUsername: assessment.targetUsername,
+              message: "我通过公开资料了解了你的项目，希望进一步认识。"
+            })
+          });
+          assessment.relationState = "PENDING_OUTGOING";
+          assessment.canRequest = false;
+          renderConnect();
+          await loadDiscoveryFeed();
+          showToast("认识请求已发送，等待对方接受");
+          return;
+        }
         const response = await fetch(`/api/screenings/${currentScreening.id}/approve`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

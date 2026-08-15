@@ -12,12 +12,14 @@ from sqlalchemy.exc import IntegrityError
 
 from .account_models import (
     ConnectionView,
+    DiscoveryAssessmentView,
     DiscoveryProfileView,
     FriendRequestCreate,
     FriendRequestView,
     LoginRequest,
     ProfileUpdateRequest,
     ProfileView,
+    PublicUserView,
     RegisterRequest,
     UserView,
     WorkCreateRequest,
@@ -66,6 +68,14 @@ class AccountService:
             display_name=user.display_name,
             status=user.status,
             created_at=user.created_at,
+        )
+
+    @staticmethod
+    def _public_user_view(user: User) -> PublicUserView:
+        return PublicUserView(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
         )
 
     @classmethod
@@ -248,7 +258,7 @@ class AccountService:
         self,
         limit: int = 12,
         offset: int = 0,
-        exclude_user_id: str | None = None,
+        viewer_user_id: str | None = None,
     ) -> list[DiscoveryProfileView]:
         limit = min(max(limit, 1), 30)
         offset = max(offset, 0)
@@ -259,7 +269,7 @@ class AccountService:
                 .where(
                     User.status == "ACTIVE",
                     UserProfile.discoverable.is_(True),
-                    *([User.id != exclude_user_id] if exclude_user_id else []),
+                    *([User.id != viewer_user_id] if viewer_user_id else []),
                 )
                 .order_by(UserProfile.updated_at.desc())
                 .offset(offset)
@@ -295,9 +305,131 @@ class AccountService:
                         avatar_url=profile.avatar_url,
                         intro_video_url=profile.intro_video_url,
                         works=[self._work_view(work) for work in works],
+                        relation_state=self._relation_state(
+                            session,
+                            viewer_user_id,
+                            user.id,
+                        ),
                     )
                 )
             return views
+
+    @staticmethod
+    def _relation_state(session, viewer_user_id: str | None, target_user_id: str) -> str:
+        if not viewer_user_id:
+            return "NONE"
+        pair = sorted([viewer_user_id, target_user_id])
+        connected = session.scalar(
+            select(Connection).where(
+                Connection.user_a_id == pair[0],
+                Connection.user_b_id == pair[1],
+            )
+        )
+        if connected:
+            return "CONNECTED"
+        pending = session.scalar(
+            select(FriendRequest).where(
+                FriendRequest.status == "PENDING",
+                or_(
+                    (
+                        (FriendRequest.sender_user_id == viewer_user_id)
+                        & (FriendRequest.recipient_user_id == target_user_id)
+                    ),
+                    (
+                        (FriendRequest.sender_user_id == target_user_id)
+                        & (FriendRequest.recipient_user_id == viewer_user_id)
+                    ),
+                ),
+            )
+        )
+        if pending is None:
+            return "NONE"
+        return (
+            "PENDING_OUTGOING"
+            if pending.sender_user_id == viewer_user_id
+            else "PENDING_INCOMING"
+        )
+
+    def assess_discovery_profile(
+        self,
+        viewer_user_id: str,
+        target_profile_id: str,
+    ) -> DiscoveryAssessmentView:
+        if viewer_user_id == target_profile_id:
+            raise ValueError("Cannot assess your own profile")
+        with self.database.session() as session:
+            viewer = session.get(User, viewer_user_id)
+            viewer_profile = session.get(UserProfile, viewer_user_id)
+            target = session.get(User, target_profile_id)
+            target_profile = session.get(UserProfile, target_profile_id)
+            if (
+                viewer is None
+                or viewer_profile is None
+                or target is None
+                or target_profile is None
+                or target.status != "ACTIVE"
+                or not target_profile.discoverable
+            ):
+                raise KeyError("Discoverable profile not found")
+
+            viewer_offers = {item.casefold(): item for item in viewer_profile.offers or []}
+            viewer_needs = {item.casefold(): item for item in viewer_profile.needs or []}
+            target_offers = {item.casefold(): item for item in target_profile.offers or []}
+            target_needs = {item.casefold(): item for item in target_profile.needs or []}
+            target_fills = [target_offers[key] for key in viewer_needs.keys() & target_offers.keys()]
+            viewer_fills = [viewer_offers[key] for key in target_needs.keys() & viewer_offers.keys()]
+
+            common_ground: list[str] = []
+            if viewer_profile.city and viewer_profile.city == target_profile.city:
+                common_ground.append(f"双方都在{viewer_profile.city}，线下沟通成本较低")
+            shared_languages = sorted(
+                set(viewer_profile.languages or []) & set(target_profile.languages or [])
+            )
+            if shared_languages:
+                common_ground.append(f"双方可使用{'、'.join(shared_languages)}沟通")
+            if viewer_profile.project_summary and target_profile.project_summary:
+                common_ground.append("双方都公开了当前项目，可从具体问题开始交流")
+            if not common_ground:
+                common_ground.append("对方已公开项目和协作信息，可进一步验证匹配度")
+
+            complementarity = [
+                *(f"对方提供的“{item}”对应你的当前需求" for item in target_fills),
+                *(f"你提供的“{item}”可能回应对方的需求" for item in viewer_fills),
+            ]
+            if not complementarity and target_profile.offers:
+                complementarity.append(
+                    f"对方公开提供：{'、'.join(target_profile.offers[:3])}"
+                )
+            if not complementarity:
+                complementarity.append("公开资料暂不足以确认能力互补，需要本人进一步判断")
+
+            questions = []
+            if target_profile.needs:
+                questions.append(f"对方寻找{'、'.join(target_profile.needs[:3])}，需要确认具体合作边界")
+            if target_profile.collaboration_style:
+                questions.append("需要确认双方投入时间和协作节奏是否一致")
+            if not questions:
+                questions.append("需要确认对方当前最希望解决的问题和可投入时间")
+
+            relation_state = self._relation_state(
+                session,
+                viewer_user_id,
+                target_profile_id,
+            )
+            return DiscoveryAssessmentView(
+                target_profile_id=target.id,
+                target_username=target.username,
+                target_display_name=target.display_name,
+                summary=(
+                    f"{target.display_name}的公开资料提供了可验证的合作线索，"
+                    "适合先发送认识请求，再由双方决定是否继续沟通。"
+                ),
+                common_ground=common_ground[:3],
+                complementarity=complementarity[:4],
+                questions=questions[:3],
+                relation_state=relation_state,
+                can_request=relation_state == "NONE",
+            )
 
     def create_work(self, user_id: str, request: WorkCreateRequest) -> WorkView:
         with self.database.session() as session:
@@ -388,7 +520,7 @@ class AccountService:
             return FriendRequestView(
                 id=record.id,
                 direction="OUTGOING",
-                user=self._user_view(target),
+                user=self._public_user_view(target),
                 status=record.status,
                 message=record.message,
                 created_at=record.created_at,
@@ -418,7 +550,7 @@ class AccountService:
                         FriendRequestView(
                             id=record.id,
                             direction="INCOMING" if incoming else "OUTGOING",
-                            user=self._user_view(other),
+                            user=self._public_user_view(other),
                             status=record.status,
                             message=record.message,
                             created_at=record.created_at,
@@ -473,7 +605,7 @@ class AccountService:
                 views.append(
                     ConnectionView(
                         id=record.id,
-                        user=self._user_view(other),
+                        user=self._public_user_view(other),
                         devices=[
                             {
                                 "id": device.id,

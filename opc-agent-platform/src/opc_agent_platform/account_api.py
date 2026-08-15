@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from .account_models import (
     ConnectionView,
+    DiscoveryAssessmentView,
+    DiscoveryProfileView,
     FriendRequestCreate,
     FriendRequestView,
     LoginRequest,
@@ -13,7 +15,6 @@ from .account_models import (
     WorkCreateRequest,
     WorkUpdateRequest,
     WorkView,
-    DiscoveryProfileView,
 )
 from .account_service import AccountService, SESSION_TTL
 
@@ -56,18 +57,35 @@ def discovery_feed(
     limit: int = Query(default=12, ge=1, le=30),
     offset: int = Query(default=0, ge=0),
 ) -> list[DiscoveryProfileView]:
-    exclude_user_id = None
+    viewer_user_id = None
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         try:
-            exclude_user_id = _service(request).authenticate(token).id
+            viewer_user_id = _service(request).authenticate(token).id
         except PermissionError:
             pass
     return _service(request).list_discovery(
         limit=limit,
         offset=offset,
-        exclude_user_id=exclude_user_id,
+        viewer_user_id=viewer_user_id,
     )
+
+
+@router.post(
+    "/discovery/{profile_id}/assessment",
+    response_model=DiscoveryAssessmentView,
+)
+def assess_discovery_profile(
+    profile_id: str,
+    request: Request,
+) -> DiscoveryAssessmentView:
+    user = _current_user(request)
+    try:
+        return _service(request).assess_discovery_profile(user.id, profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/auth/register", response_model=ProfileView, status_code=201)

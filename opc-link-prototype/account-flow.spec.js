@@ -45,3 +45,64 @@ test('registered user can edit profile, add work, view connections, and logout',
   await page.locator('#logoutButton').click();
   await expect(page.locator('#authGate')).toBeVisible();
 });
+
+test('discovery assessment creates a real connection request', async ({ page, playwright }) => {
+  const suffix = Date.now().toString().slice(-8);
+  const senderUsername = 'sender' + suffix;
+  const recipientUsername = 'target' + suffix;
+  const apiBase = new URL(APP_URL).origin;
+  const recipient = await playwright.request.newContext({ baseURL: apiBase });
+
+  await recipient.post('/api/auth/register', {
+    data: {
+      username: recipientUsername,
+      email: recipientUsername + '@example.com',
+      password: 'recipient-test-password',
+      displayName: '目标用户'
+    }
+  });
+  await recipient.put('/api/me/profile', {
+    data: {
+      role: 'Agent 工程师',
+      city: '杭州',
+      projectSummary: '帮助小团队接入本地模型。',
+      offers: ['Agent 接入'],
+      needs: ['产品反馈'],
+      discoverable: true
+    }
+  });
+
+  await page.goto(APP_URL);
+  await page.locator('#registerTab').click();
+  await page.locator('#authDisplayName').fill('请求用户');
+  await page.locator('#authIdentity').fill(senderUsername);
+  await page.locator('#authEmail').fill(senderUsername + '@example.com');
+  await page.locator('#authPassword').fill('sender-test-password');
+  await page.locator('#authSubmit').click();
+  await expect(page.locator('#authGate')).toHaveClass(/hidden/);
+  await expect(page.locator('#candidateName')).toHaveText('目标用户');
+
+  const assessmentResponse = page.waitForResponse(response =>
+    response.url().includes('/api/discovery/') && response.url().endsWith('/assessment')
+  );
+  await page.locator('#agentButton').click();
+  expect((await assessmentResponse).status()).toBe(200);
+  await expect(page.locator('#connectView')).toHaveClass(/active/);
+  await expect(page.locator('#connectTitle')).toHaveText('Agent 已完成初步了解');
+  await expect(page.locator('#connectDisclosure')).toContainText('没有联系对方');
+  await expect(page.locator('#approveButton')).toHaveText('请求认识');
+
+  await page.locator('#approveButton').click();
+  await expect(page.locator('#approveButton')).toHaveText('等待对方接受');
+  const requests = await recipient.get('/api/connection-requests');
+  const incoming = (await requests.json()).find(item =>
+    item.direction === 'INCOMING' && item.user.username === senderUsername
+  );
+  expect(incoming).toBeTruthy();
+  expect((await recipient.post('/api/connection-requests/' + incoming.id + '/accept')).status()).toBe(204);
+
+  await page.locator('#connectView [data-go="discover"]').click();
+  await page.locator('[data-go="friends"]:visible').click();
+  await expect(page.locator('#connectionList')).toContainText('目标用户');
+  await recipient.dispose();
+});

@@ -45,6 +45,12 @@ class UserView(APIModel):
     created_at: datetime
 
 
+class PublicUserView(APIModel):
+    id: str
+    username: str
+    display_name: str
+
+
 class ProfileView(APIModel):
     user: UserView
     role: str
@@ -132,6 +138,30 @@ class DiscoveryProfileView(APIModel):
     avatar_url: str | None
     intro_video_url: str | None
     works: list[WorkView]
+    relation_state: Literal[
+        "NONE",
+        "PENDING_OUTGOING",
+        "PENDING_INCOMING",
+        "CONNECTED",
+    ] = "NONE"
+
+
+class DiscoveryAssessmentView(APIModel):
+    target_profile_id: str
+    target_username: str
+    target_display_name: str
+    summary: str
+    common_ground: list[str]
+    complementarity: list[str]
+    questions: list[str]
+    relation_state: Literal[
+        "NONE",
+        "PENDING_OUTGOING",
+        "PENDING_INCOMING",
+        "CONNECTED",
+    ]
+    can_request: bool
+    basis: Literal["PUBLIC_PROFILE"] = "PUBLIC_PROFILE"
 
 
 class FriendRequestCreate(APIModel):
@@ -142,7 +172,7 @@ class FriendRequestCreate(APIModel):
 class FriendRequestView(APIModel):
     id: str
     direction: Literal["INCOMING", "OUTGOING"]
-    user: UserView
+    user: PublicUserView
     status: str
     message: str
     created_at: datetime
@@ -150,6 +180,6 @@ class FriendRequestView(APIModel):
 
 class ConnectionView(APIModel):
     id: str
-    user: UserView
+    user: PublicUserView
     devices: list[dict[str, object]]
     created_at: datetime

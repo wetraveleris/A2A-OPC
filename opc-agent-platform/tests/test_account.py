@@ -80,25 +80,56 @@ async def test_account_profile_works_and_connections_are_persistent(
             },
         )
         assert bob_register.status_code == 201, bob_register.text
+        bob_profile = await bob.put(
+            "/api/me/profile",
+            json={
+                "role": "Agent 工程师",
+                "offers": ["工程协作"],
+                "needs": ["产品原型"],
+            },
+        )
+        assert bob_profile.status_code == 200, bob_profile.text
 
-        request = await alice.post(
+        bob_feed = await bob.get("/api/discovery/feed")
+        alice_discovery = next(
+            item for item in bob_feed.json() if item["username"] == "alice-opc"
+        )
+        assert alice_discovery["relationState"] == "NONE"
+        assessment = await bob.post(
+            f"/api/discovery/{alice_discovery['profileId']}/assessment"
+        )
+        assert assessment.status_code == 200, assessment.text
+        assert assessment.json()["basis"] == "PUBLIC_PROFILE"
+        assert assessment.json()["canRequest"] is True
+        assert assessment.json()["complementarity"]
+
+        request = await bob.post(
             "/api/connection-requests",
             json={
-                "targetUsername": "bob-opc",
+                "targetUsername": "alice-opc",
                 "message": "一起验证 Agent 协作。",
             },
         )
         assert request.status_code == 201, request.text
         request_id = request.json()["id"]
-        incoming = await bob.get("/api/connection-requests")
+        bob_feed_after_request = await bob.get("/api/discovery/feed")
+        alice_after_request = next(
+            item
+            for item in bob_feed_after_request.json()
+            if item["username"] == "alice-opc"
+        )
+        assert alice_after_request["relationState"] == "PENDING_OUTGOING"
+
+        incoming = await alice.get("/api/connection-requests")
         assert incoming.status_code == 200
         assert incoming.json()[0]["direction"] == "INCOMING"
+        assert "email" not in incoming.json()[0]["user"]
 
-        accepted = await bob.post(f"/api/connection-requests/{request_id}/accept")
+        accepted = await alice.post(f"/api/connection-requests/{request_id}/accept")
         assert accepted.status_code == 204, accepted.text
-        connections = await alice.get("/api/connections")
+        connections = await bob.get("/api/connections")
         assert connections.status_code == 200
-        assert connections.json()[0]["user"]["username"] == "bob-opc"
+        assert connections.json()[0]["user"]["username"] == "alice-opc"
 
         await alice.post("/api/auth/logout")
         unauthenticated = await alice.get("/api/auth/me")

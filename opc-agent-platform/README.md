@@ -48,6 +48,7 @@ POST /api/auth/register
 POST /api/auth/login
 GET  /api/auth/me
 GET  /api/discovery/feed
+POST /api/discovery/{profile_id}/assessment
 GET  /api/me/profile
 PUT  /api/me/profile
 GET/POST /api/me/works
@@ -56,6 +57,8 @@ GET/POST /api/connection-requests
 ```
 
 认证使用 `HttpOnly`、`SameSite=Lax` 的 `opc_session` Cookie。发现流不会展示当前登录用户自己；只有 `discoverable=true` 的用户和 `PUBLIC` 作品会进入公开结果。
+
+认识流程为：滑动查看公开资料和视频 → 当前用户的 Agent 基于公开资料完成初步评估 → 发送真实连接请求 → 对方本人接受 → 双方进入连接列表。陌生人评估不会伪造 A2A 对话；只有建立连接并且设备在线后，才进入人工直聊、人工审核或 Agent 托管。
 
 ## 本地模型
 
