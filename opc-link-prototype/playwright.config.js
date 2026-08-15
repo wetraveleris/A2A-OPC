@@ -1,6 +1,6 @@
 module.exports = {
   testDir: '.',
-  testMatch: 'smoke.spec.js',
+  testMatch: '**/*.spec.js',
   timeout: 120_000,
   use: {
     channel: 'chrome',

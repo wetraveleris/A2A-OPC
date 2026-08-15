@@ -14,12 +14,14 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .a2a_runtime import mount_a2a_agents
+from .account_api import router as account_router
+from .account_service import AccountService
 from .conversation import A2ACommunicator, ScreeningService
+from .database import Database
 from .deepseek import DeepSeekClient
 from .employee_chat import EmployeeChatService, EmployeeChatStore
 from .human_chat import HumanChatService, HumanChatStore
 from .internet_a2a import InternetA2AService
-from .live_conversation import LiveConversationService, LiveConversationStore
 from .models import (
     AgentProfile,
     CreateInternetA2ARequest,
@@ -34,20 +36,14 @@ from .models import (
     HumanChatStopRequest,
     HumanChatSwitchModeRequest,
     HumanChatView,
-    CreateLiveScheduleRequest,
     CreateScreeningRequest,
-    CreateScheduleInquiryRequest,
     DecisionRequest,
     InternetA2ARecord,
     InternetA2ATarget,
-    LiveConversationRecord,
-    ScheduleConfirmationRequest,
-    ScheduleRecord,
     ScreeningRecord,
 )
 from .profiles import PROFILES, get_profile
 from .relay import RelayError, RelayHub
-from .scheduling import ScheduleService, ScheduleStore
 from .store import ScreeningStore
 
 
@@ -60,6 +56,7 @@ def create_app(
     a2a_transport: httpx.AsyncBaseTransport | None = None,
     use_environment_llm: bool = True,
     deepseek_client: DeepSeekClient | None = None,
+    database_url: str | None = None,
 ) -> FastAPI:
     resolved_base_url = (
         base_url
@@ -78,8 +75,9 @@ def create_app(
             "http://localhost:8010",
             "http://127.0.0.1:8088",
         ],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
     resolved_deepseek_client = deepseek_client or (
@@ -95,16 +93,6 @@ def create_app(
         communicator=communicator,
         deepseek_client=resolved_deepseek_client,
     )
-    schedule_store = ScheduleStore()
-    schedule_service = ScheduleService(
-        store=schedule_store,
-        communicator=communicator,
-    )
-    live_conversation_store = LiveConversationStore()
-    live_conversation_service = LiveConversationService(
-        store=live_conversation_store,
-        communicator=communicator,
-    )
     internet_a2a_service = InternetA2AService(communicator=communicator)
     employee_chat_store = EmployeeChatStore()
     employee_chat_service = EmployeeChatService(
@@ -118,18 +106,20 @@ def create_app(
         communicator=communicator,
         relay_hub=relay_hub,
     )
+    database = Database(database_url)
+    database.create_schema()
+    account_service = AccountService(database)
     app.state.screening_store = store
     app.state.screening_service = screening_service
-    app.state.schedule_store = schedule_store
-    app.state.schedule_service = schedule_service
-    app.state.live_conversation_store = live_conversation_store
-    app.state.live_conversation_service = live_conversation_service
     app.state.internet_a2a_service = internet_a2a_service
     app.state.employee_chat_store = employee_chat_store
     app.state.employee_chat_service = employee_chat_service
     app.state.human_chat_store = human_chat_store
     app.state.human_chat_service = human_chat_service
     app.state.relay_hub = relay_hub
+    app.state.database = database
+    app.state.account_service = account_service
+    app.include_router(account_router)
 
     @app.get("/api/relay/agents")
     async def relay_agents() -> list[dict[str, object]]:
@@ -461,107 +451,6 @@ def create_app(
         try:
             return await store.decide(
                 screening_id,
-                request.agent_id,
-                request.decision,
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @app.post(
-        "/api/schedule-inquiries",
-        response_model=ScheduleRecord,
-        status_code=201,
-    )
-    async def create_schedule_inquiry(
-        request: CreateScheduleInquiryRequest,
-    ) -> ScheduleRecord:
-        try:
-            return await schedule_service.start(request)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"A2A scheduling failed: {exc}",
-            ) from exc
-
-    @app.get(
-        "/api/schedule-inquiries/{schedule_id}",
-        response_model=ScheduleRecord,
-    )
-    async def get_schedule_inquiry(schedule_id: str) -> ScheduleRecord:
-        try:
-            return await schedule_store.get(schedule_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    @app.post(
-        "/api/schedule-inquiries/{schedule_id}/confirm",
-        response_model=ScheduleRecord,
-    )
-    async def confirm_schedule_inquiry(
-        schedule_id: str,
-        request: ScheduleConfirmationRequest,
-    ) -> ScheduleRecord:
-        try:
-            return await schedule_store.confirm(
-                schedule_id,
-                request.agent_id,
-                request.decision,
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @app.post("/api/live-conversations/schedule", status_code=201)
-    async def create_live_schedule_conversation(
-        request: CreateLiveScheduleRequest,
-    ) -> StreamingResponse:
-        try:
-            record = await live_conversation_service.create(request)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return StreamingResponse(
-            live_conversation_service.stream(record.id),
-            status_code=201,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache, no-transform",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
-    @app.get(
-        "/api/live-conversations/{conversation_id}",
-        response_model=LiveConversationRecord,
-    )
-    async def get_live_conversation(
-        conversation_id: str,
-    ) -> LiveConversationRecord:
-        try:
-            return await live_conversation_store.get(conversation_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    @app.post(
-        "/api/live-conversations/{conversation_id}/confirm",
-        response_model=LiveConversationRecord,
-    )
-    async def confirm_live_conversation(
-        conversation_id: str,
-        request: ScheduleConfirmationRequest,
-    ) -> LiveConversationRecord:
-        try:
-            return await live_conversation_store.confirm(
-                conversation_id,
                 request.agent_id,
                 request.decision,
             )

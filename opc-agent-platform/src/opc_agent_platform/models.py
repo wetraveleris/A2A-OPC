@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -142,126 +142,6 @@ class CreateScreeningRequest(APIModel):
 class DecisionRequest(APIModel):
     agent_id: str
     decision: Literal["approve", "decline"]
-
-
-class AvailabilityStatus(StrEnum):
-    AVAILABLE = "AVAILABLE"
-    BUSY = "BUSY"
-    OUTSIDE_WORKING_HOURS = "OUTSIDE_WORKING_HOURS"
-
-
-class ScheduleState(StrEnum):
-    CREATED = "CREATED"
-    CHECKING_TARGET = "CHECKING_TARGET"
-    CHECKING_REQUESTER = "CHECKING_REQUESTER"
-    AGENTS_CONFIRMED = "AGENTS_CONFIRMED"
-    WAITING_HUMAN_CONFIRMATION = "WAITING_HUMAN_CONFIRMATION"
-    CONFIRMED = "CONFIRMED"
-    NO_COMMON_SLOT = "NO_COMMON_SLOT"
-    DECLINED = "DECLINED"
-    FAILED = "FAILED"
-
-
-class CreateScheduleInquiryRequest(APIModel):
-    from_agent_id: str
-    to_agent_id: str
-    requested_start: datetime
-    duration_minutes: int = Field(default=30, ge=15, le=120)
-    topic: str = Field(min_length=1, max_length=120)
-
-    @field_validator("requested_start")
-    @classmethod
-    def require_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("requestedStart must include a timezone")
-        return value
-
-
-class ScheduleRecord(APIModel):
-    id: str
-    from_agent_id: str
-    to_agent_id: str
-    requested_start: datetime
-    duration_minutes: int
-    timezone: str = "Asia/Shanghai"
-    topic: str
-    state: ScheduleState
-    agents_confirmed: bool = False
-    human_confirmation_required: bool = True
-    confirmations: list[str] = Field(default_factory=list)
-    transcript: list[TranscriptTurn] = Field(default_factory=list)
-    message: str = ""
-    alternatives: list[datetime] = Field(default_factory=list)
-    error: str | None = None
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-
-
-class ScheduleConfirmationRequest(APIModel):
-    agent_id: str
-    decision: Literal["confirm", "decline"]
-
-
-class LiveConversationState(StrEnum):
-    CREATED = "CREATED"
-    STREAMING = "STREAMING"
-    NO_COMMON_SLOT = "NO_COMMON_SLOT"
-    WAITING_HUMAN_CONFIRMATION = "WAITING_HUMAN_CONFIRMATION"
-    CONFIRMED = "CONFIRMED"
-    DECLINED = "DECLINED"
-    FAILED = "FAILED"
-
-
-class CreateLiveScheduleRequest(APIModel):
-    from_agent_id: str
-    to_agent_id: str
-    requested_start: datetime
-    duration_minutes: int = Field(default=30, ge=15, le=120)
-    topic: str = Field(min_length=1, max_length=120)
-
-    @field_validator("requested_start")
-    @classmethod
-    def require_live_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("requestedStart must include a timezone")
-        return value
-
-
-class LiveConversationMessage(APIModel):
-    turn: int
-    speaker_agent_id: str
-    recipient_agent_id: str
-    text: str
-    task_id: str
-    task_state: str
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-
-
-class LiveConversationRecord(APIModel):
-    id: str
-    from_agent_id: str
-    to_agent_id: str
-    requested_start: datetime
-    duration_minutes: int
-    topic: str
-    state: LiveConversationState
-    messages: list[LiveConversationMessage] = Field(default_factory=list)
-    agents_confirmed: bool = False
-    human_confirmation_required: bool = True
-    confirmations: list[str] = Field(default_factory=list)
-    error: str | None = None
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
 
 
 class InternetA2ATarget(APIModel):

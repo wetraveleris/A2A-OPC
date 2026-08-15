@@ -223,7 +223,7 @@
       bottom: 22px;
       height: 66px;
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       color: inherit;
     }
     .tab {
@@ -243,6 +243,68 @@
     .tab.light { color: #8b8d86; }
     .tab.light.active { color: var(--ink); }
     .tabbar.light { color: var(--ink); border-top: 1px solid var(--line); background: rgba(245,245,240,.93); backdrop-filter: blur(20px); }
+
+    .auth-gate {
+      position: absolute;
+      z-index: 110;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 24px 34px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    .auth-gate.hidden { display: none; }
+    .auth-brand { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 750; letter-spacing: .08em; }
+    .auth-brand .mark { background: #6e852f; }
+    .auth-gate h1 { margin: 30px 0 10px; font-size: 32px; line-height: 1.12; font-weight: 680; }
+    .auth-gate > p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 13px; }
+    .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 34px; border-bottom: 1px solid var(--line); }
+    .auth-tab { min-height: 43px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 13px; }
+    .auth-tab.active { border-bottom-color: var(--ink); color: var(--ink); font-weight: 700; }
+    .auth-form { display: grid; gap: 13px; margin-top: 20px; }
+    .auth-form label, .editor-form label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
+    .auth-form input, .editor-form input, .editor-form textarea, .editor-form select, .friend-form input {
+      width: 100%; min-height: 45px; border: 1px solid var(--line); border-radius: 7px; padding: 0 12px;
+      background: var(--surface); color: var(--ink); outline: 0;
+    }
+    .auth-form textarea, .editor-form textarea { min-height: 82px; padding-top: 11px; resize: vertical; }
+    .auth-form .primary { margin-top: 5px; width: 100%; }
+    .auth-error, .friend-error { min-height: 18px; margin: 0; color: #a7453d; font-size: 12px; line-height: 1.45; }
+    .editor { background: var(--paper); }
+    .editor-head { padding: 57px 20px 16px; display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+    .editor-head h1 { margin: 0; font-size: 27px; font-weight: 680; }
+    .editor-head p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .editor-form { display: grid; gap: 14px; }
+    .editor-form textarea { width: 100%; }
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .editor-section { padding: 18px 0; border-top: 1px solid var(--line); }
+    .editor-section h2 { margin: 0 0 12px; font-size: 13px; }
+    .editor-section > p { margin: -5px 0 13px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 0 18px; }
+    .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 13px; }
+    .switch-row input { width: 20px; height: 20px; accent-color: #6e852f; }
+    .work-list { display: grid; gap: 9px; }
+    .work-card, .friend-card, .request-card { padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .work-card { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; }
+    .work-card h3, .friend-card h3, .request-card h3 { margin: 0 0 4px; font-size: 14px; }
+    .work-card p, .friend-card p, .request-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .work-card button { min-width: 44px; min-height: 36px; border: 0; background: transparent; color: #a7453d; font-size: 12px; }
+    .empty-state { padding: 26px 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .friends { background: var(--paper); }
+    .friends-head { padding: 57px 20px 16px; }
+    .friends-head h1 { margin: 0; font-size: 27px; font-weight: 680; }
+    .friends-head p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .friend-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; margin-bottom: 18px; }
+    .friend-form button { min-width: 72px; min-height: 45px; border-radius: 7px; }
+    .friend-group { padding: 17px 0; border-top: 1px solid var(--line); }
+    .friend-group h2 { margin: 0 0 11px; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .friend-list { display: grid; gap: 9px; }
+    .friend-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .friend-card small { display: block; margin-top: 5px; color: #6e852f; font-size: 10px; }
+    .request-actions { display: flex; gap: 7px; margin-top: 10px; }
+    .request-actions button { min-height: 35px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
 
     .sheet {
       position: absolute;
@@ -340,27 +402,6 @@
     .transcript-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; }
     .transcript-turn p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }
     .transcript-task { margin-top: 7px; color: #8a8c84; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 10px; overflow-wrap: anywhere; }
-    .schedule-time { margin: 14px 0 4px; font-size: 38px; line-height: 1; font-weight: 680; }
-    .schedule-date { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
-    .schedule-status { padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .schedule-status strong { display: block; margin-bottom: 5px; font-size: 16px; }
-    .schedule-status p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-    #scheduleSheet { max-height: calc(100% - 20px); padding-top: 46px; }
-    .schedule-chat { display: grid; gap: 14px; padding: 18px 0 4px; }
-    .schedule-turn { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; align-items: end; }
-    .schedule-turn.mine { grid-template-columns: minmax(0, 1fr) 28px; }
-    .schedule-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #dde2cf; color: #4f5f27; font-size: 11px; font-weight: 750; }
-    .schedule-turn.mine .schedule-avatar { grid-column: 2; background: var(--ink); color: var(--white); }
-    .schedule-message { min-width: 0; max-width: 88%; }
-    .schedule-turn.mine .schedule-message { grid-column: 1; grid-row: 1; justify-self: end; }
-    .schedule-speaker { display: block; margin: 0 0 5px; color: var(--muted); font-size: 10px; }
-    .schedule-turn.mine .schedule-speaker { text-align: right; }
-    .schedule-bubble { min-height: 35px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px 8px 8px 2px; background: #fff; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
-    .schedule-turn.mine .schedule-bubble { border-color: #c5d788; border-radius: 8px 8px 2px 8px; background: #e7efca; }
-    .schedule-turn.generating .schedule-bubble:empty::after { content: ""; display: block; width: 24px; height: 7px; margin: 5px 0; background: radial-gradient(circle, #7a7d74 2px, transparent 2.5px) 0 50% / 8px 8px repeat-x; animation: live-thinking .9s ease-in-out infinite alternate; }
-    @keyframes live-thinking { to { opacity: .35; transform: translateY(-1px); } }
-    .schedule-task { display: none; }
-    .schedule-actions { position: sticky; bottom: -28px; margin-top: 14px; padding: 14px 0 8px; border-top: 1px solid var(--line); background: var(--surface); }
     .decision-bar { position: absolute; z-index: 8; left: 0; right: 0; bottom: 22px; padding: 12px 20px 14px; display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; background: rgba(245,245,240,.94); backdrop-filter: blur(18px); border-top: 1px solid var(--line); }
     .primary, .secondary {
       min-height: 50px;
@@ -622,6 +663,24 @@
           </span>
         </div>
 
+        <section class="auth-gate" id="authGate" aria-label="登录 OPC Link">
+          <div class="auth-brand"><span class="mark"></span> OPC LINK</div>
+          <h1 id="authTitle">进入你的 Agent 空间</h1>
+          <p id="authSubtitle">登录后管理你的资料、作品，并发现可以真实协作的人。</p>
+          <div class="auth-tabs" role="tablist">
+            <button class="auth-tab active" id="loginTab" type="button">登录</button>
+            <button class="auth-tab" id="registerTab" type="button">注册</button>
+          </div>
+          <form class="auth-form" id="authForm">
+            <label id="authDisplayNameField" hidden>显示名称<input id="authDisplayName" autocomplete="name" maxlength="80"></label>
+            <label>用户名或邮箱<input id="authIdentity" autocomplete="username" required minlength="3"></label>
+            <label id="authEmailField" hidden>邮箱<input id="authEmail" type="email" autocomplete="email"></label>
+            <label>密码<input id="authPassword" type="password" autocomplete="current-password" required minlength="10"></label>
+            <p class="auth-error" id="authError" role="alert"></p>
+            <button class="primary" id="authSubmit" type="submit">登录</button>
+          </form>
+        </section>
+
         <main class="view discover active" id="discoverView" data-view="discover">
           <section class="video-stage" id="videoStage" aria-label="OPC 推荐视频，向上或向下滑动切换">
             <video class="candidate-video" id="candidateVideo" muted playsinline loop preload="metadata"></video>
@@ -654,8 +713,7 @@
           </div>
           <nav class="tabbar" aria-label="主导航">
             <button class="tab active" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
-            <button class="tab" data-go="connect"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
-            <button class="tab" data-go="internet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9S14.3 18.5 12 21M12 3C9.7 5.5 8.5 8.5 8.5 12s1.2 6.5 3.5 9"/></svg>公网</button>
+            <button class="tab" data-go="friends"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
             <button class="tab" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
           </nav>
 
@@ -666,6 +724,27 @@
             <div id="reasonList"></div>
             <button class="primary" id="sheetAgentButton" style="width:100%; margin-top:10px;">让 Agent 先聊</button>
           </aside>
+        </main>
+
+        <main class="view friends" id="friendsView" data-view="friends">
+          <header class="friends-head">
+            <h1>连接</h1>
+            <p>这里只显示已经互相同意的连接。设备在线后，才能发起跨电脑 Agent 沟通。</p>
+          </header>
+          <div class="scroll">
+            <form class="friend-form" id="friendForm">
+              <input id="friendUsername" placeholder="输入对方用户名" autocomplete="off" required minlength="3">
+              <button class="primary" type="submit">添加</button>
+            </form>
+            <p class="friend-error" id="friendError" role="alert"></p>
+            <section class="friend-group"><h2>已连接的人</h2><div class="friend-list" id="connectionList"></div></section>
+            <section class="friend-group"><h2>连接请求</h2><div class="friend-list" id="requestList"></div></section>
+          </div>
+          <nav class="tabbar light" aria-label="主导航">
+            <button class="tab light" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
+            <button class="tab light active" data-go="friends"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
+            <button class="tab light" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
+          </nav>
         </main>
 
         <main class="view" id="connectView" data-view="connect">
@@ -731,30 +810,9 @@
             <section class="profile-section"><h2>工作方式</h2><p id="profileStyle"></p></section>
             <section class="moment"><span class="moment-time">最近瞬间 · 2 天前</span><p id="profileMoment"></p></section>
           </div>
-          <div class="decision-bar" style="grid-template-columns: 1fr 1.7fr;">
-            <button class="secondary" id="profileScheduleButton">问 15:00</button>
+          <div class="decision-bar" style="grid-template-columns: 1fr;">
             <button class="primary" id="profileAgentButton">让 Agent 先聊</button>
           </div>
-          <aside class="sheet" id="scheduleSheet" aria-label="Agent 时间确认结果">
-            <div class="sheet-handle"></div>
-            <div class="transcript-head">
-              <h2 id="scheduleTitle">双方 Agent 都有空</h2>
-              <button class="transcript-close" id="scheduleClose" aria-label="关闭时间确认结果">
-                <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
-              </button>
-            </div>
-            <div class="schedule-time">15:00</div>
-            <p class="schedule-date">今天 · 30 分钟 · Asia/Shanghai</p>
-            <section class="schedule-status">
-              <strong id="scheduleStatus">Agent 正在互相确认</strong>
-              <p id="scheduleMessage">只交换可用状态，不共享日历详情。</p>
-            </section>
-            <div class="schedule-chat" id="scheduleTurns" aria-live="polite"></div>
-            <div class="schedule-actions">
-              <button class="primary" id="scheduleConfirmButton">确认这个时间</button>
-              <p class="disclosure" style="text-align:center; padding-bottom:0;">确认后仍需等待对方本人同意</p>
-            </div>
-          </aside>
         </main>
 
         <main class="view internet" id="internetView" data-view="internet">
@@ -884,21 +942,34 @@
           </div>
         </main>
 
-        <main class="view onboarding" id="onboardingView" data-view="onboarding">
-          <section class="onboard-content">
-            <span class="step">建立你的 OPC Agent · 1 / 3</span>
-            <h1>你最近在认真做什么？</h1>
-            <p>一句话就够。Agent 会帮你整理项目方向、能力与需求。</p>
-            <div class="field">
-              <label for="opcStatement">正在做的事</label>
-              <textarea id="opcStatement" placeholder="例如：正在做一个帮助独立开发者销售产品的 AI 工具"></textarea>
-              <div class="field-help">仅在你确认后公开</div>
-            </div>
-            <div class="onboard-action">
-              <button class="primary" id="continueButton">继续</button>
-              <button class="skip" data-go="discover">先看看</button>
-            </div>
-          </section>
+        <main class="view editor" id="onboardingView" data-view="onboarding">
+          <header class="editor-head"><div><h1>我的空间</h1><p id="accountMeta">正在读取账号</p></div><button class="secondary" id="logoutButton" type="button">退出</button></header>
+          <div class="scroll">
+            <form class="editor-form" id="profileForm">
+              <section class="editor-section" style="border-top:0; padding-top:0;"><h2>个人资料</h2>
+                <div class="editor-grid"><label>显示名称<input id="profileDisplayName" required maxlength="80"></label><label>身份<input id="myRole" maxlength="100"></label></div>
+                <div class="editor-grid"><label>所在城市<input id="myCity" maxlength="100"></label><label>语言<input id="profileLanguages" placeholder="中文, English"></label></div>
+                <label>一句话介绍<textarea id="myBio" maxlength="1000"></textarea></label>
+                <label>正在做的项目<textarea id="profileProjectSummary" maxlength="500"></textarea></label>
+                <label>可以提供<textarea id="myOffers" placeholder="产品策略, 工程实现"></textarea></label>
+                <label>正在寻找<textarea id="myNeeds" placeholder="用户研究, 海外伙伴"></textarea></label>
+                <label>协作方式<textarea id="myStyle" maxlength="500"></textarea></label>
+                <label>介绍视频地址<input id="profileVideoUrl" type="url" maxlength="2000"></label>
+                <label class="switch-row">允许 Agent 在发现流中展示<input id="profileDiscoverable" type="checkbox"></label>
+                <button class="primary" id="profileSaveButton" type="submit">保存资料</button>
+                <button class="secondary" type="button" data-go="internet">开发调试：公网 A2A</button>
+                <p class="auth-error" id="profileError" role="alert"></p>
+              </section>
+            </form>
+            <section class="editor-section"><h2>我的作品</h2><p>公开作品会出现在发现流，连接可见作品只对好友展示。</p><div class="work-list" id="workList"></div>
+              <form class="editor-form" id="workForm" style="margin-top:14px;"><label>作品名称<input id="workTitle" required maxlength="120"></label><label>作品简介<textarea id="workSummary" maxlength="2000"></textarea></label><div class="editor-grid"><label>我的角色<input id="workRole" maxlength="100"></label><label>可见范围<select id="workVisibility"><option value="PUBLIC">公开</option><option value="CONNECTIONS">仅连接可见</option><option value="PRIVATE">私密</option></select></label></div><button class="secondary" type="submit">添加作品</button><p class="auth-error" id="workError" role="alert"></p></form>
+            </section>
+          </div>
+          <nav class="tabbar light" aria-label="主导航">
+            <button class="tab light" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
+            <button class="tab light" data-go="friends"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
+            <button class="tab light active" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
+          </nav>
         </main>
 
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -908,7 +979,7 @@
   </div>
 
   <script>
-    const candidates = [
+    let candidates = [
       {
         id: "shen-zhiye",
         name: "沈知野", role: "独立开发者 · 杭州", city: "杭州 · GMT+8",
@@ -961,11 +1032,15 @@
     let currentScreening = null;
     let currentLiveConversation = null;
     let screeningCandidate = null;
-    let scheduleCandidate = null;
     let internetTarget = null;
     let internetTargets = [];
     let internetTargetPromise = null;
     let relayAgents = [];
+    let currentUser = null;
+    let currentProfile = null;
+    let currentWorks = [];
+    let authMode = "login";
+    let appReady = false;
     let roomCreating = false;
     let screeningRunning = false;
     const $ = (id) => document.getElementById(id);
@@ -982,7 +1057,209 @@
       toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
     }
 
+    async function apiJson(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: "include",
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || ("请求失败 (" + response.status + ")"));
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const register = mode === "register";
+      $("loginTab").classList.toggle("active", !register);
+      $("registerTab").classList.toggle("active", register);
+      $("authTitle").textContent = register ? "创建你的 Agent 空间" : "进入你的 Agent 空间";
+      $("authSubtitle").textContent = register
+        ? "注册后填写你的资料，让 Agent 代表你参与发现和协作。"
+        : "登录后管理你的资料、作品，并发现可以真实协作的人。";
+      $("authDisplayNameField").hidden = !register;
+      $("authEmailField").hidden = !register;
+      $("authIdentity").placeholder = register ? "用户名" : "用户名或邮箱";
+      $("authPassword").autocomplete = register ? "new-password" : "current-password";
+      $("authSubmit").textContent = register ? "创建账号" : "登录";
+      $("authError").textContent = "";
+    }
+
+    function showAuth() {
+      appReady = false;
+      $("authGate").classList.remove("hidden");
+      setAuthMode(authMode);
+    }
+
+    function hideAuth(profile) {
+      currentProfile = profile;
+      currentUser = profile.user;
+      appReady = true;
+      $("authGate").classList.add("hidden");
+      renderMySpace();
+    }
+
+    function splitList(value) {
+      return value.split(/[,，\n]/).map(item => item.trim()).filter(Boolean);
+    }
+
+    function mapDiscoveryProfile(item, fallbackIndex) {
+      const publicWork = item.works?.find(work => work.videoUrl) || item.works?.[0];
+      return {
+        id: item.username,
+        profileId: item.profileId,
+        name: item.displayName,
+        role: [item.role, item.city].filter(Boolean).join(" · ") || "OPC 创作者",
+        city: item.city || "线上",
+        signal: item.works?.length ? "有作品可看" : "公开资料",
+        project: item.projectSummary || item.bio || "正在寻找新的协作可能。",
+        offers: item.offers?.join("、") || "等待补充",
+        needs: item.needs?.join("、") || "开放认识",
+        video: item.introVideoUrl || publicWork?.videoUrl || [
+          "../视频/121311_5b97ff14ca15b2db.mp4",
+          "../视频/501354dd-b84b-426d-ba44-eff53355b69f.mp4",
+          "../视频/preview (1).mp4"
+        ][fallbackIndex % 3],
+        style: item.collaborationStyle || "协作方式待进一步了解。",
+        moment: publicWork ? publicWork.title + " · " + (publicWork.summary || "公开作品") : "还没有公开作品。",
+        reasons: [
+          ["公开资料", item.bio || "已允许在发现流中展示资料。"],
+          ["作品线索", publicWork?.title || "可以先从个人项目开始了解。"],
+          ["协作方向", item.needs?.join("、") || "正在寻找协作机会"]
+        ],
+        questions: ["是否适合当前合作目标", "实际投入时间和协作边界"]
+      };
+    }
+
+    async function loadDiscoveryFeed() {
+      if (!appReady) return;
+      const feed = await apiJson("/api/discovery/feed?limit=20");
+      candidates = feed.map(mapDiscoveryProfile);
+      index = 0;
+      renderCandidate(false);
+      if ($("discoverView").classList.contains("active")) video.play().catch(() => {});
+    }
+
+    function renderMySpace() {
+      if (!currentProfile) return;
+      const profile = currentProfile;
+      $("accountMeta").textContent = "@" + profile.user.username + " · " + profile.user.email;
+      $("profileDisplayName").value = profile.user.displayName || "";
+      $("myRole").value = profile.role || "";
+      $("myCity").value = profile.city || "";
+      $("profileLanguages").value = (profile.languages || []).join(", ");
+      $("myBio").value = profile.bio || "";
+      $("profileProjectSummary").value = profile.projectSummary || "";
+      $("myOffers").value = (profile.offers || []).join(", ");
+      $("myNeeds").value = (profile.needs || []).join(", ");
+      $("myStyle").value = profile.collaborationStyle || "";
+      $("profileVideoUrl").value = profile.introVideoUrl || "";
+      $("profileDiscoverable").checked = Boolean(profile.discoverable);
+      renderWorks();
+    }
+
+    function renderWorks() {
+      const list = $("workList");
+      if (!currentWorks.length) {
+        list.innerHTML = '<div class="empty-state">还没有作品。先添加一个你正在做的项目。</div>';
+        return;
+      }
+      list.replaceChildren(...currentWorks.map(work => {
+        const card = document.createElement("article");
+        card.className = "work-card";
+        const body = document.createElement("div");
+        const title = document.createElement("h3");
+        title.textContent = work.title;
+        const summary = document.createElement("p");
+        summary.textContent = (work.visibility === "PUBLIC" ? "公开" : work.visibility === "CONNECTIONS" ? "仅连接可见" : "私密") + " · " + (work.summary || "暂无简介");
+        body.append(title, summary);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "删除";
+        button.addEventListener("click", async () => {
+          try {
+            await apiJson("/api/me/works/" + work.id, { method: "DELETE" });
+            currentWorks = currentWorks.filter(item => item.id !== work.id);
+            renderWorks();
+          } catch (error) { showToast(error.message); }
+        });
+        card.append(body, button);
+        return card;
+      }));
+    }
+
+    async function loadMySpace() {
+      currentProfile = await apiJson("/api/me/profile");
+      currentUser = currentProfile.user;
+      currentWorks = await apiJson("/api/me/works");
+      renderMySpace();
+    }
+
+    function renderConnections(connections, requests) {
+      const connectionList = $("connectionList");
+      const requestList = $("requestList");
+      if (!connections.length) {
+        connectionList.innerHTML = '<div class="empty-state">还没有好友连接。先在发现流了解一个人，再交换用户名发起连接。</div>';
+      } else {
+        connectionList.replaceChildren(...connections.map(connection => {
+          const card = document.createElement("article");
+          card.className = "friend-card";
+          const online = connection.devices?.some(device => device.status === "ONLINE");
+          card.innerHTML = '<div><h3></h3><p></p><small>' + (online ? "设备在线，可继续接入" : "设备暂未在线") + '</small></div>';
+          card.querySelector("h3").textContent = connection.user.displayName;
+          card.querySelector("p").textContent = "@" + connection.user.username;
+          return card;
+        }));
+      }
+      const incoming = requests.filter(request => request.direction === "INCOMING" && request.status === "PENDING");
+      if (!incoming.length) {
+        requestList.innerHTML = '<div class="empty-state">暂时没有待处理的连接请求。</div>';
+      } else {
+        requestList.replaceChildren(...incoming.map(request => {
+          const card = document.createElement("article");
+          card.className = "request-card";
+          card.innerHTML = '<h3></h3><p></p><div class="request-actions"><button class="primary" type="button">接受</button><button class="secondary" type="button">拒绝</button></div>';
+          card.querySelector("h3").textContent = request.user.displayName + " · @" + request.user.username;
+          card.querySelector("p").textContent = request.message || "请求添加你为连接。";
+          card.querySelector(".primary").addEventListener("click", () => decideConnection(request.id, true));
+          card.querySelector(".secondary").addEventListener("click", () => decideConnection(request.id, false));
+          return card;
+        }));
+      }
+    }
+
+    async function loadConnections() {
+      if (!appReady) return;
+      const [connections, requests] = await Promise.all([
+        apiJson("/api/connections"),
+        apiJson("/api/connection-requests")
+      ]);
+      renderConnections(connections, requests);
+    }
+
+    async function decideConnection(requestId, accept) {
+      try {
+        await apiJson("/api/connection-requests/" + requestId + "/" + (accept ? "accept" : "decline"), { method: "POST" });
+        await loadConnections();
+        showToast(accept ? "已添加连接" : "已忽略请求");
+      } catch (error) { showToast(error.message); }
+    }
+
     function renderCandidate(autoplay = true) {
+      if (!candidates.length) {
+        video.removeAttribute("src");
+        $("candidateSignal").textContent = "暂无公开 Agent";
+        $("candidateName").textContent = "还没有可发现的人";
+        $("candidateRole").textContent = "完善资料并打开发现开关，成为第一个被看见的人。";
+        $("candidateProject").textContent = "发现流只展示真实注册用户的公开资料和作品。";
+        $("candidateOffers").textContent = "";
+        $("candidateNeeds").textContent = "";
+        $("pager").replaceChildren();
+        $("reasonList").replaceChildren();
+        return;
+      }
       const c = candidates[index];
       video.src = c.video;
       $("candidateSignal").textContent = `${c.signal} · 为什么推荐`;
@@ -998,11 +1275,13 @@
     }
 
     function stepCandidate(direction) {
+      if (!candidates.length) return;
       index = (index + direction + candidates.length) % candidates.length;
       renderCandidate();
     }
 
     function renderProfile() {
+      if (!candidates.length) return;
       const c = candidates[index];
       profileVideo.src = c.video;
       $("profileName").textContent = c.name;
@@ -1098,155 +1377,6 @@
         setScreeningError(error.message || "网络连接失败");
       } finally {
         screeningRunning = false;
-      }
-    }
-
-    function todayAtThreeInShanghai() {
-      const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Shanghai",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).formatToParts(new Date());
-      const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-      return `${values.year}-${values.month}-${values.day}T15:00:00+08:00`;
-    }
-
-    function prepareLiveSchedule(candidate) {
-      currentLiveConversation = null;
-      $("scheduleTitle").textContent = "Agent 正在沟通";
-      $("scheduleStatus").textContent = `我的 Agent 正在联系 ${candidate.name}`;
-      $("scheduleMessage").textContent = "消息由当前配置的模型实时生成，并通过 A2A 逐段传输。";
-      $("scheduleTurns").replaceChildren();
-      $("scheduleConfirmButton").disabled = true;
-      $("scheduleConfirmButton").textContent = "等待 Agent 确认";
-      $("scheduleSheet").classList.add("open");
-    }
-
-    function startLiveMessage(message) {
-      const row = document.createElement("div");
-      const mine = message.speakerAgentId === "opc-builder";
-      row.id = `scheduleTurn${message.turn}`;
-      row.className = `schedule-turn generating${mine ? " mine" : ""}`;
-
-      const avatar = document.createElement("div");
-      avatar.className = "schedule-avatar";
-      avatar.textContent = mine ? "我" : message.speakerName.slice(0, 1);
-
-      const body = document.createElement("div");
-      body.className = "schedule-message";
-      const speaker = document.createElement("span");
-      speaker.className = "schedule-speaker";
-      speaker.textContent = mine ? "我的 Agent" : `${message.speakerName}的 Agent`;
-      const bubble = document.createElement("div");
-      bubble.className = "schedule-bubble";
-      const task = document.createElement("div");
-      task.className = "schedule-task";
-      body.append(speaker, bubble, task);
-      row.append(avatar, body);
-      $("scheduleTurns").append(row);
-      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    function appendLiveMessage(message) {
-      const row = $(`scheduleTurn${message.turn}`);
-      if (!row) return;
-      row.querySelector(".schedule-bubble").append(document.createTextNode(message.text));
-      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    function completeLiveMessage(message) {
-      const row = $(`scheduleTurn${message.turn}`);
-      if (!row) return;
-      row.classList.remove("generating");
-      row.classList.add("complete");
-      row.querySelector(".schedule-task").textContent = `A2A Task · ${message.taskState}`;
-    }
-
-    function completeLiveSchedule(record) {
-      currentLiveConversation = record;
-      const confirmed = record.agentsConfirmed;
-      $("scheduleTitle").textContent = confirmed ? "双方 Agent 都有空" : "这个时间有冲突";
-      $("scheduleStatus").textContent = confirmed ? "Agent 已完成实时确认" : "Agent 已核对日历";
-      $("scheduleMessage").textContent = record.message;
-      const alreadyConfirmed = record.confirmations.includes("opc-builder");
-      $("scheduleConfirmButton").disabled = !confirmed || alreadyConfirmed;
-      $("scheduleConfirmButton").textContent = confirmed ? (alreadyConfirmed ? "等待对方本人确认" : "确认这个时间") : "该时间暂不可约";
-      $("scheduleConfirmButton").scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    async function readEventStream(response, onEvent) {
-      if (!response.body) throw new Error("浏览器不支持流式响应");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-        const frames = buffer.split(/\r?\n\r?\n/);
-        buffer = frames.pop() || "";
-        for (const frame of frames) {
-          let eventName = "message";
-          const data = [];
-          for (const line of frame.split(/\r?\n/)) {
-            if (line.startsWith("event:")) eventName = line.slice(6).trim();
-            if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
-          }
-          if (data.length) onEvent(eventName, JSON.parse(data.join("\n")));
-        }
-        if (done) break;
-      }
-    }
-
-    function handleLiveEvent(eventName, data) {
-      if (eventName === "conversation.started") {
-        currentLiveConversation = { id: data.conversationId, confirmations: [] };
-      } else if (eventName === "message.started") {
-        startLiveMessage(data);
-        $("scheduleStatus").textContent = `${data.speakerName}的 Agent 正在输入`;
-      } else if (eventName === "message.delta") {
-        appendLiveMessage(data);
-      } else if (eventName === "message.completed") {
-        completeLiveMessage(data);
-      } else if (eventName === "conversation.completed") {
-        completeLiveSchedule(data);
-      } else if (eventName === "error") {
-        throw new Error(data.message || "Agent 沟通中断");
-      }
-    }
-
-    async function startScheduleInquiry() {
-      scheduleCandidate = candidates[index];
-      const button = $("profileScheduleButton");
-      button.disabled = true;
-      button.textContent = "沟通中";
-      prepareLiveSchedule(scheduleCandidate);
-      try {
-        const response = await fetch("/api/live-conversations/schedule", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fromAgentId: "opc-builder",
-            toAgentId: scheduleCandidate.id,
-            requestedStart: todayAtThreeInShanghai(),
-            durationMinutes: 30,
-            topic: "一起沟通 OPC Agent 合作"
-          })
-        });
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error.detail || "时间确认失败");
-        }
-        await readEventStream(response, handleLiveEvent);
-      } catch (error) {
-        $("scheduleTitle").textContent = "这次没有聊成";
-        $("scheduleStatus").textContent = "Agent 沟通中断";
-        $("scheduleMessage").textContent = error.message || "稍后再试一次。";
-        $("scheduleConfirmButton").disabled = true;
-        showToast(error.message || "时间确认失败");
-      } finally {
-        button.disabled = false;
-        button.textContent = "问 15:00";
       }
     }
 
@@ -1585,7 +1715,6 @@
       statusbar.style.color = dark ? "#f7f8f3" : "#181916";
       $("reasonSheet").classList.remove("open");
       $("transcriptSheet").classList.remove("open");
-      $("scheduleSheet").classList.remove("open");
       video.pause();
       profileVideo.pause();
       if (viewName === "discover") video.play().catch(() => {});
@@ -1597,7 +1726,9 @@
         });
         loadRelayAgents();
       }
-      if (viewName === "onboarding") $("opcStatement").focus({ preventScroll: true });
+      if (viewName === "friends") loadConnections().catch(error => $("friendError").textContent = error.message);
+      if (viewName === "onboarding") loadMySpace().catch(error => $("profileError").textContent = error.message);
+      document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.go === viewName));
       $("phone").scrollTop = 0;
       window.scrollTo(0, 0);
       requestAnimationFrame(() => {
@@ -1693,41 +1824,133 @@
     }
     $("declineButton").addEventListener("click", () => decideScreening("decline"));
     $("approveButton").addEventListener("click", () => decideScreening("approve"));
-    $("profileScheduleButton").addEventListener("click", startScheduleInquiry);
-    $("scheduleClose").addEventListener("click", () => $("scheduleSheet").classList.remove("open"));
-    $("scheduleConfirmButton").addEventListener("click", async () => {
-      if (!currentLiveConversation) return;
-      try {
-        const response = await fetch(`/api/live-conversations/${currentLiveConversation.id}/confirm`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentId: "opc-builder", decision: "confirm" })
-        });
-        if (!response.ok) throw new Error("确认没有完成");
-        currentLiveConversation = await response.json();
-        completeLiveSchedule({ ...currentLiveConversation, message: "你已确认，等待对方本人确认。" });
-        showToast("你已确认，等待对方本人");
-      } catch (error) {
-        showToast(error.message);
-      }
-    });
+
     $("profileAgentButton").addEventListener("click", startAgentScreening);
     $("internetForm").addEventListener("submit", startInternetA2A);
     $("internetSingleMode").addEventListener("click", () => setInternetMode("single"));
     $("internetChatMode").addEventListener("click", () => setInternetMode("chat"));
     $("employeeChatForm").addEventListener("submit", createHumanRoom);
     document.querySelectorAll('input[name="chatMode"]').forEach(input => input.addEventListener("change", updateChatMode));
-    $("continueButton").addEventListener("click", () => {
-      const value = $("opcStatement").value.trim();
-      if (!value) { showToast("先用一句话说说你在做什么"); $("opcStatement").focus(); return; }
-      showToast("Agent 已开始整理你的 OPC 信息");
-      setTimeout(() => go("discover"), 900);
+    $("loginTab").addEventListener("click", () => setAuthMode("login"));
+    $("registerTab").addEventListener("click", () => setAuthMode("register"));
+    $("authForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const register = authMode === "register";
+      const payload = register
+        ? {
+            username: $("authIdentity").value.trim(),
+            email: $("authEmail").value.trim(),
+            password: $("authPassword").value,
+            displayName: $("authDisplayName").value.trim()
+          }
+        : { identity: $("authIdentity").value.trim(), password: $("authPassword").value };
+      $("authError").textContent = "";
+      $("authSubmit").disabled = true;
+      try {
+        const profile = await apiJson(register ? "/api/auth/register" : "/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        $("authForm").reset();
+        hideAuth(profile);
+        await Promise.all([loadMySpace(), loadDiscoveryFeed()]);
+        go("discover");
+      } catch (error) {
+        $("authError").textContent = error.message;
+      } finally {
+        $("authSubmit").disabled = false;
+      }
+    });
+    $("profileForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      $("profileError").textContent = "";
+      $("profileSaveButton").disabled = true;
+      try {
+        currentProfile = await apiJson("/api/me/profile", {
+          method: "PUT",
+          body: JSON.stringify({
+            displayName: $("profileDisplayName").value.trim(),
+            role: $("myRole").value.trim(),
+            city: $("myCity").value.trim(),
+            languages: splitList($("profileLanguages").value),
+            bio: $("myBio").value.trim(),
+            projectSummary: $("profileProjectSummary").value.trim(),
+            offers: splitList($("myOffers").value),
+            needs: splitList($("myNeeds").value),
+            collaborationStyle: $("myStyle").value.trim(),
+            introVideoUrl: $("profileVideoUrl").value.trim() || null,
+            discoverable: $("profileDiscoverable").checked
+          })
+        });
+        currentUser = currentProfile.user;
+        showToast("资料已保存");
+        await loadDiscoveryFeed();
+      } catch (error) {
+        $("profileError").textContent = error.message;
+      } finally {
+        $("profileSaveButton").disabled = false;
+      }
+    });
+    $("workForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      $("workError").textContent = "";
+      try {
+        const work = await apiJson("/api/me/works", {
+          method: "POST",
+          body: JSON.stringify({
+            title: $("workTitle").value.trim(),
+            summary: $("workSummary").value.trim(),
+            role: $("workRole").value.trim(),
+            visibility: $("workVisibility").value
+          })
+        });
+        currentWorks = [work, ...currentWorks];
+        $("workForm").reset();
+        renderWorks();
+        showToast("作品已添加");
+      } catch (error) {
+        $("workError").textContent = error.message;
+      }
+    });
+    $("friendForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      $("friendError").textContent = "";
+      try {
+        await apiJson("/api/connection-requests", {
+          method: "POST",
+          body: JSON.stringify({ targetUsername: $("friendUsername").value.trim(), message: "想和你建立 OPC 连接。" })
+        });
+        $("friendForm").reset();
+        await loadConnections();
+        showToast("连接请求已发送");
+      } catch (error) {
+        $("friendError").textContent = error.message;
+      }
+    });
+    $("logoutButton").addEventListener("click", async () => {
+      try { await apiJson("/api/auth/logout", { method: "POST" }); } catch (error) { /* local state still clears */ }
+      currentUser = null;
+      currentProfile = null;
+      currentWorks = [];
+      showAuth();
     });
     $("discoverView").addEventListener("click", e => {
       if (e.target === $("discoverView") && $("reasonSheet").classList.contains("open")) $("reasonSheet").classList.remove("open");
     });
 
-    renderCandidate(false);
+    async function boot() {
+      setAuthMode("login");
+      try {
+        const profile = await apiJson("/api/auth/me");
+        hideAuth(profile);
+        await Promise.all([loadMySpace(), loadDiscoveryFeed()]);
+      } catch (error) {
+        showAuth();
+      }
+      renderCandidate(false);
+    }
+
+    boot();
     setInterval(() => {
       if ($("internetView").classList.contains("active")) loadRelayAgents();
     }, 5000);

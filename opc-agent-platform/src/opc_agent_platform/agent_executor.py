@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from datetime import datetime
 import logging
 from typing import Any
-from uuid import uuid4
 
 from a2a.helpers import (
     get_data_parts,
     new_data_part,
     new_task_from_user_message,
     new_text_message,
-    new_text_part,
 )
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -19,7 +15,6 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState
 
 from .deepseek import DeepSeekClient
-from .calendar_tool import check_availability
 from .matching import analyze_pair
 from .models import AgentProfile
 
@@ -63,8 +58,6 @@ class OPCDecisionEngine:
         if _contains_sensitive_key(request):
             raise ValueError("Sensitive fields are not allowed in automated screening")
 
-        if request.get("protocol") == "opc.scheduling.v1":
-            return self._respond_to_schedule(request)
         if request.get("protocol") == "opc.public_inquiry.v1":
             return self._respond_to_public_inquiry(request)
         if request.get("protocol") == "opc.employee_chat.v1":
@@ -281,114 +274,6 @@ class OPCDecisionEngine:
             },
         }
 
-    def _respond_to_schedule(self, request: dict[str, Any]) -> dict[str, Any]:
-        sender_id = str(request.get("senderAgentId", ""))
-        recipient_id = str(request.get("recipientAgentId", ""))
-        round_number = int(request.get("round", 0))
-        if recipient_id != self.profile.id:
-            raise ValueError("Message recipient does not match this Agent")
-        if sender_id not in self.profiles:
-            raise ValueError("Unknown sending Agent")
-        if round_number not in {1, 2, 3}:
-            raise ValueError("Unsupported scheduling round")
-
-        requested_start = datetime.fromisoformat(
-            str(request["requestedStart"]).replace("Z", "+00:00")
-        )
-        duration_minutes = int(request["durationMinutes"])
-        availability = check_availability(
-            self.profile.id,
-            requested_start,
-            duration_minutes,
-        )
-        time_label = availability.start.strftime("%H:%M")
-        if availability.available and round_number == 1:
-            message = f"{self.profile.name}的 Agent 已查询日历：{time_label} 有空。你这边也确认一下。"
-        elif availability.available and round_number == 2:
-            message = f"{self.profile.name}的 Agent 也确认 {time_label} 有空，可以发起暂定会面。"
-        elif availability.available:
-            message = f"双方 Agent 已确认 {time_label} 都有空，已生成暂定会面。"
-        else:
-            message = f"{self.profile.name}在 {time_label} 暂时没有空。"
-
-        return {
-            "protocol": "opc.scheduling.v1",
-            "conversationId": request.get("conversationId"),
-            "round": round_number,
-            "senderAgentId": self.profile.id,
-            "recipientAgentId": sender_id,
-            "intent": "availability_response",
-            "message": message,
-            "availability": {
-                "status": availability.status.value,
-                "requestedStart": availability.start.isoformat(),
-                "requestedEnd": availability.end.isoformat(),
-                "timezone": "Asia/Shanghai",
-                "alternatives": [
-                    candidate.isoformat() for candidate in availability.alternatives
-                ],
-            },
-            "agentConfirmed": availability.available,
-            "tentativeHold": availability.available and round_number == 3,
-            "humanConfirmationRequired": True,
-            "decisionEngine": {
-                "provider": "calendar_tool",
-                "tool": "check_availability",
-            },
-        }
-
-    async def stream_live_schedule(
-        self,
-        request: dict[str, Any],
-    ) -> AsyncIterator[str]:
-        speaker_id = str(request.get("speakerAgentId", ""))
-        other_id = str(request.get("otherAgentId", ""))
-        turn = int(request.get("turn", 0))
-        if speaker_id != self.profile.id:
-            raise ValueError("Live message speaker does not match this Agent")
-        if other_id not in self.profiles:
-            raise ValueError("Unknown other Agent")
-        if turn not in {1, 2, 3, 4}:
-            raise ValueError("Unsupported live conversation turn")
-
-        other = self.profiles[other_id]
-        availability_status = str(request["availabilityStatus"])
-        if self.deepseek_client:
-            async for chunk in self.deepseek_client.stream_schedule_message(
-                speaker=self.profile,
-                other=other,
-                turn=turn,
-                requested_start=str(request["requestedStart"]),
-                duration_minutes=int(request["durationMinutes"]),
-                topic=str(request["topic"]),
-                availability_status=availability_status,
-                other_availability_status=(
-                    str(request["otherAvailabilityStatus"])
-                    if request.get("otherAvailabilityStatus")
-                    else None
-                ),
-                previous_message=request.get("previousMessage"),
-            ):
-                yield chunk
-            return
-
-        time_label = datetime.fromisoformat(
-            str(request["requestedStart"]).replace("Z", "+00:00")
-        ).strftime("%H:%M")
-        if availability_status != "AVAILABLE":
-            text = f"我刚查过日历，今天 {time_label} 暂时没有空，暂时无法确认这次沟通。"
-        else:
-            messages = {
-                1: f"你好，想问一下今天 {time_label} 是否方便？我们聊聊{request['topic']}。",
-                2: f"可以，我查过日历，今天 {time_label} 有空。你这边也确认了吗？",
-                3: f"我这边也有空，那就先暂定今天 {time_label}，等待双方本人确认。",
-                4: f"好的，双方 Agent 都确认可用，已生成 {time_label} 的暂定会面。",
-            }
-            text = messages[turn]
-        for offset in range(0, len(text), 4):
-            yield text[offset : offset + 4]
-
-
 class OPCAgentExecutor(AgentExecutor):
     def __init__(self, engine: OPCDecisionEngine) -> None:
         self.engine = engine
@@ -421,9 +306,6 @@ class OPCAgentExecutor(AgentExecutor):
                 request.get("protocol"),
                 sorted(request),
             )
-            if request.get("protocol") == "opc.live_schedule.v1":
-                await self._stream_live_response(request, updater)
-                return
             response = await self.engine.respond(request)
         except Exception as exc:
             await updater.update_status(
@@ -440,39 +322,6 @@ class OPCAgentExecutor(AgentExecutor):
         await updater.update_status(
             TaskState.TASK_STATE_COMPLETED,
             message=new_text_message("OPC screening round completed."),
-        )
-
-    async def _stream_live_response(
-        self,
-        request: dict[str, Any],
-        updater: TaskUpdater,
-    ) -> None:
-        artifact_id = str(uuid4())
-        pending: str | None = None
-        first_chunk = True
-        async for chunk in self.engine.stream_live_schedule(request):
-            if pending is not None:
-                await updater.add_artifact(
-                    parts=[new_text_part(pending, media_type="text/plain")],
-                    artifact_id=artifact_id,
-                    name="live-agent-message",
-                    append=not first_chunk,
-                    last_chunk=False,
-                )
-                first_chunk = False
-            pending = chunk
-        if pending is None:
-            raise ValueError("Agent produced an empty live message")
-        await updater.add_artifact(
-            parts=[new_text_part(pending, media_type="text/plain")],
-            artifact_id=artifact_id,
-            name="live-agent-message",
-            append=not first_chunk,
-            last_chunk=True,
-        )
-        await updater.update_status(
-            TaskState.TASK_STATE_COMPLETED,
-            message=new_text_message("Live Agent message completed."),
         )
 
     async def cancel(

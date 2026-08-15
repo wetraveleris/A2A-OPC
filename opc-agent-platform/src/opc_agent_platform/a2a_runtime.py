@@ -46,14 +46,6 @@ SKILLS = [
         tags=["opc", "introduction"],
     ),
     AgentSkill(
-        id="coordinate_schedule",
-        name="Coordinate Schedule",
-        description="Check private calendars and return only availability and alternatives.",
-        input_modes=["application/json"],
-        output_modes=["application/json"],
-        tags=["opc", "calendar", "scheduling"],
-    ),
-    AgentSkill(
         id="public_inquiry",
         name="Public Inquiry",
         description="Answer natural-language questions using only the public OPC profile.",

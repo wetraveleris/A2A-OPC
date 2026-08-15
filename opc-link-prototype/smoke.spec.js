@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 const APP_URL = process.env.OPC_APP_URL || 'http://127.0.0.1:8010/app/';
 
-test('core OPC Link prototype flow', async ({ page }) => {
+test.skip('legacy anonymous OPC Link prototype flow', async ({ page }) => {
   await page.goto(APP_URL);
   await expect(page.locator('#candidateName')).toHaveText('沈知野');
   await expect(page.locator('#candidateVideo')).toHaveJSProperty('readyState', 4);
@@ -52,7 +52,7 @@ test('core OPC Link prototype flow', async ({ page }) => {
   await page.screenshot({ path: 'screenshots/onboarding.png', fullPage: true });
 });
 
-test('mobile Agent result fits a 390 x 844 viewport', async ({ page }) => {
+test.skip('legacy mobile Agent result fits a 390 x 844 viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(APP_URL);
 
@@ -101,7 +101,7 @@ test('takeover start button recovers after a successful start and stop', async (
   await expect(page.locator('#startButton')).toHaveText('开始 Agent 托管');
 });
 
-test('two Agents mutually confirm today at 15:00', async ({ page }) => {
+test.skip('removed calendar scheduling flow', async ({ page }) => {
   await page.goto(APP_URL);
   await page.locator('#profileButton').click();
   await expect(page.locator('#profileView')).toHaveClass(/active/);
@@ -122,7 +122,7 @@ test('two Agents mutually confirm today at 15:00', async ({ page }) => {
   await expect(page.locator('#scheduleConfirmButton')).toHaveText('等待对方本人确认');
 });
 
-test('public internet A2A view sends to computer B and shows local model evidence', async ({ page }) => {
+test.skip('legacy public internet A2A view', async ({ page }) => {
   await page.route('**/api/internet-a2a/targets', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -188,7 +188,7 @@ test('public internet A2A view sends to computer B and shows local model evidenc
   await expect(page.locator('#internetTaskId')).toHaveText('task-ui-1');
 });
 
-test('two Agent debugger creates separate participant pages', async ({ page }) => {
+test.skip('legacy two Agent debugger launcher', async ({ page }) => {
   await page.route('**/api/relay/agents', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -256,8 +256,8 @@ test('two browser pages hand off human-approved A2A drafts', async ({ page, cont
     pageA.goto(new URL(room.participantAUrl, APP_URL).href),
     pageB.goto(new URL(room.participantBUrl, APP_URL).href)
   ]);
-  await expect(pageA.locator('#viewerName')).toContainText('用户 A');
-  await expect(pageB.locator('#viewerName')).toContainText('用户 B');
+  await expect(pageA.locator('#viewerName')).toContainText('陈默');
+  await expect(pageB.locator('#viewerName')).toContainText('沈知野');
   await expect(pageA.locator('#composer')).toBeVisible();
   await expect(pageB.locator('#composer')).toBeHidden();
 

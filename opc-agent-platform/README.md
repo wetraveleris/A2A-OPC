@@ -1,6 +1,6 @@
 # OPC Agent Platform
 
-一个基于官方 `a2a-sdk==1.1.0` 的可运行 MVP。四个 OPC Agent 共享同一运行时，但拥有独立 Agent Card、A2A JSON-RPC 地址和任务存储。三轮沟通与最终报告可由本机 Ollama 或 DeepSeek 生成，协议身份和隐私边界由服务端控制。
+一个基于官方 `a2a-sdk==1.1.0` 的 OPC Agent 产品原型。平台提供账号、个人空间、作品发现、好友连接和可审计的 A2A 沟通；本机 Ollama 或 DeepSeek 负责 Agent 回复，协议身份和隐私边界由服务端控制。
 
 ## 当前能力
 
@@ -12,8 +12,10 @@
 - 双方分别确认后才进入 `MUTUAL_APPROVED`
 - 同一服务提供 API、现有视频原型和视频文件
 - 报告返回实际模型、调用次数与 token 用量
-- 两个 Agent 可通过 A2A 互查日历并生成暂定会面
-- 日历工具只返回可用状态和备选时间，不暴露私人日程详情
+- 账号密码登录、个人资料编辑和公开发现开关
+- 作品管理支持公开、好友可见和私密三种范围
+- 连接关系需要双方同意，连接页只展示已建立关系和设备状态
+- 发现流只返回可发现用户的公开资料和公开作品，不返回邮箱等账号隐私
 - 可从本机 OPC Agent 向陌生第三方公网 Perkoon Agent 发起一次真实 A2A Task
 - 两个 Agent 可通过 `opc.employee_chat.v1` 交替多轮沟通并累积共享上下文
 - 调试记录包含 Agent Card URL、JSON-RPC URL、Task ID、请求响应和上下文前后快照
@@ -35,7 +37,25 @@ uv run opc-agent-platform
 uv run pytest
 ```
 
-当前存储为进程内内存，适合协议与产品流程验证；生产环境需要替换为持久数据库、身份认证、字段级授权和 Agent Card 签名验证。
+账号和资料默认存储在 `data/opc-link.db`（SQLite），生产环境通过 `OPC_DATABASE_URL` 使用 PostgreSQL。首轮使用 SQLAlchemy 自动建表；正式上线前应使用 Alembic 迁移、Redis 会话/事件和对象存储承载视频与作品媒体。
+
+## 账号与产品 API
+
+网页入口现在先要求登录或注册。核心接口：
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/auth/me
+GET  /api/discovery/feed
+GET  /api/me/profile
+PUT  /api/me/profile
+GET/POST /api/me/works
+GET  /api/connections
+GET/POST /api/connection-requests
+```
+
+认证使用 `HttpOnly`、`SameSite=Lax` 的 `opc_session` Cookie。发现流不会展示当前登录用户自己；只有 `discoverable=true` 的用户和 `PUBLIC` 作品会进入公开结果。
 
 ## 本地模型
 
@@ -58,7 +78,7 @@ OLLAMA_MODEL=qwen3:4b
 
 ## 公网 A2A 演示
 
-页面入口：<http://127.0.0.1:8010/app/> 的 `公网` 标签。
+公网 A2A 能力保留为开发调试入口和 API；生产主导航是 `发现 / 连接 / 我的`。页面发现流面向陌生用户的视频与作品，双 Agent 调试页仍用于验证人工介入、Agent 托管和真实公网 Relay。
 
 默认目标是陌生第三方 `https://perkoon.com`，无需 API Key。它会返回 P2P 文件传输 Agent 的能力说明、CLI/MCP 用法和后续动作。
 
@@ -94,7 +114,7 @@ curl -X POST http://127.0.0.1:8010/api/internet-a2a/demo \
 
 ## 双 Agent 对话调试
 
-打开页面的 `公网` 标签，切换到 `双 Agent 调试`。陈默 Agent 与沈知野 Agent 拥有独立身份和角色提示，通过 A2A `message/send` 交替聊天。每轮请求会携带最近聊天历史，因此两个 Agent 能像普通 AI 聊天窗口一样理解上下文并自然接续。
+登录后进入 `我的 → 开发调试：公网 A2A`，切换到 `双 Agent 调试`。陈默 Agent 与沈知野 Agent 拥有独立身份和角色提示，通过 A2A `message/send` 交替聊天。每轮请求会携带最近聊天历史，因此两个 Agent 能像普通 AI 聊天窗口一样理解上下文并自然接续。
 
 当前页面会创建两个带独立访问令牌的长期会话链接，分别对应用户 A 和用户 B。创建后及沟通过程中都可以切换控制模式，建议把两个链接放在两个浏览器窗口、无痕窗口或两台设备中打开：
 
@@ -179,21 +199,3 @@ uv run opc-relay-node
 ```
 
 访问 `/api/relay/agents` 可以查看两端在线状态和各自模型。页面的 `公网 → 双 Agent 调试` 默认使用 Relay；逐条人工批准和 Agent 托管要求两端在线，人工直聊不调用模型，允许离线创建。
-
-## 时间确认任务
-
-下面的请求会让两个 Agent 依次执行 `A -> B`、`B -> A`、`A -> B` 三轮确认：
-
-```bash
-curl -X POST http://127.0.0.1:8010/api/schedule-inquiries \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "fromAgentId": "opc-builder",
-    "toAgentId": "shen-zhiye",
-    "requestedStart": "2026-08-10T15:00:00+08:00",
-    "durationMinutes": 30,
-    "topic": "一起沟通 OPC Agent 合作"
-  }'
-```
-
-双方 Agent 都可用时，状态进入 `WAITING_HUMAN_CONFIRMATION`。只有两位本人分别调用确认接口后，状态才会变成 `CONFIRMED`。
