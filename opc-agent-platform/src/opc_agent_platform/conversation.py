@@ -307,9 +307,13 @@ class ScreeningService:
         from_agent_id: str,
         to_agent_id: str,
         use_relay: bool = False,
+        source_profile: AgentProfile | None = None,
+        target_profile: AgentProfile | None = None,
     ) -> ScreeningRecord:
-        source = get_profile(from_agent_id)
-        target = get_profile(to_agent_id)
+        source = source_profile or get_profile(from_agent_id)
+        target = target_profile or get_profile(to_agent_id)
+        if source.id != from_agent_id or target.id != to_agent_id:
+            raise ValueError("Agent profile does not match its bound device")
         if source.id == target.id:
             raise ValueError("An Agent cannot screen itself")
         if use_relay:
@@ -333,6 +337,7 @@ class ScreeningService:
                 target.id,
                 "introduce_opc",
                 source.a2a_packet(),
+                target.a2a_packet(),
             )
             first_response = await self._exchange(
                 record.id, first_request, use_relay=use_relay
@@ -345,6 +350,7 @@ class ScreeningService:
                 source.id,
                 "answer_screening",
                 target.a2a_packet(),
+                source.a2a_packet(),
                 first_response,
             )
             second_response = await self._exchange(
@@ -358,6 +364,7 @@ class ScreeningService:
                 target.id,
                 "propose_introduction",
                 source.a2a_packet(),
+                target.a2a_packet(),
                 second_response,
             )
             await self._exchange(record.id, third_request, use_relay=use_relay)
@@ -461,6 +468,7 @@ class ScreeningService:
         recipient_id: str,
         intent: str,
         disclosed_profile: dict[str, Any],
+        recipient_profile: dict[str, Any],
         previous_response: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -471,6 +479,7 @@ class ScreeningService:
             "recipientAgentId": recipient_id,
             "intent": intent,
             "disclosedProfile": disclosed_profile,
+            "recipientProfile": recipient_profile,
             "humanConfirmationRequired": True,
         }
         if previous_response is not None:

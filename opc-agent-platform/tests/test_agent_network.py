@@ -73,6 +73,8 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         discovery = await alice.get("/api/discovery/online-agents")
         assert discovery.status_code == 200, discovery.text
         assert [card["agentId"] for card in discovery.json()] == ["shen-zhiye"]
+        assert discovery.json()[0]["name"] == "Bob"
+        assert discovery.json()[0]["agentName"] == "B computer"
         assert discovery.json()[0]["online"] is True
         assert discovery.json()[0]["model"] == "qwen3:1.7b"
 
@@ -86,6 +88,10 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
         assert introduced.status_code == 201, introduced.text
         introduction = introduced.json()
         assert introduction["state"] == "WAITING_APPROVAL"
+        assert introduction["sourceName"] == "Alice"
+        assert introduction["targetName"] == "Bob"
+        assert introduction["sourceAgentName"] == "A computer"
+        assert introduction["targetAgentName"] == "B computer"
         assert len(introduction["transcript"]) == 3
         assert len(
             {turn["taskId"] for turn in introduction["transcript"]}
@@ -94,6 +100,14 @@ async def test_online_agents_create_a2a_introduction_and_contact(tmp_path) -> No
             turn["taskState"] == "TASK_STATE_COMPLETED"
             for turn in introduction["transcript"]
         )
+        assert {
+            turn["request"]["recipientProfile"]["name"]
+            for turn in introduction["transcript"]
+        } == {"Alice", "Bob"}
+        assert {
+            turn["response"]["disclosedProfile"]["name"]
+            for turn in introduction["transcript"]
+        } == {"Alice", "Bob"}
 
         requested = await alice.post(
             f"/api/agent-introductions/{introduction['id']}/request-contact"

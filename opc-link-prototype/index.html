@@ -1110,10 +1110,11 @@
       return {
         id: item.agentId,
         agentId: item.agentId,
+        agentName: item.agentName,
         networkAgent: true,
         owner: item.owner,
         name: item.name,
-        role: [item.role, item.city].filter(Boolean).join(" · ") || "OPC 创作者",
+        role: [`@${item.owner.username}`, item.role, item.city].filter(Boolean).join(" · "),
         city: item.city || "线上",
         signal: relationSignals[item.relationState] || `实时在线 · ${item.model || "本地模型"}`,
         project: item.projectSummary || "正在寻找新的协作可能。",
@@ -1121,9 +1122,9 @@
         needs: item.needs?.join("、") || "开放认识",
         monogram: monogram(item.name),
         style: item.collaborationStyle || "协作方式待进一步了解。",
-        moment: `在线 Agent · ${item.provider || "local"} / ${item.model || "unknown"}`,
+        moment: `${item.agentName} · ${item.provider || "local"} / ${item.model || "unknown"}`,
         reasons: [
-          ["实时在线", `${item.name}的 Agent 当前已连接公网 Relay。`],
+          ["实时在线", `${item.name}的代理设备“${item.agentName}”当前已连接公网 Relay。`],
           ["A2A 1.0", "初聊会在两台电脑之间产生可追溯的 A2A Task。"],
           ["协作方向", item.needs?.join("、") || "正在寻找协作机会"]
         ],
@@ -1376,7 +1377,7 @@
           CONNECTED: "已经是联系人"
         };
         $("connectTitle").textContent = "双方 Agent 已完成初聊";
-        $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName}`;
+        $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName} · 双方 Agent 代理`;
         $("connectRound").textContent = `${introduction.transcript.length} 个 Task`;
         $("connectRecommendation").textContent = stateLabels[introduction.relationState] || "初聊完成";
         $("connectSummary").textContent = report.summary || "双方 Agent 已交换公开资料并完成初步了解。";

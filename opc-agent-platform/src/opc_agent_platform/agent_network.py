@@ -16,9 +16,10 @@ from .database import (
     Device,
     FriendRequest,
     User,
+    UserProfile,
     utc_now,
 )
-from .models import APIModel
+from .models import AIUsage, APIModel, AgentProfile
 from .profiles import PROFILES, get_profile
 from .relay import RelayHub
 
@@ -43,6 +44,7 @@ class AgentDeviceView(APIModel):
 
 class OnlineAgentCardView(APIModel):
     agent_id: str
+    agent_name: str
     name: str
     role: str
     city: str
@@ -73,6 +75,8 @@ class AgentIntroductionView(APIModel):
     target_agent_id: str
     source_name: str
     target_name: str
+    source_agent_name: str
+    target_agent_name: str
     goal: str
     state: str
     relation_state: str
@@ -102,8 +106,47 @@ class AgentNetworkService:
             username=user.username,
             display_name=user.display_name,
         )
+
     def _relay_status(self, agent_id: str) -> dict[str, object]:
         return self.relay_hub.status([agent_id])[0]
+
+    @staticmethod
+    def _owner_agent_profile(
+        user: User,
+        profile: UserProfile,
+        agent_id: str,
+    ) -> AgentProfile:
+        template = get_profile(agent_id)
+        return template.model_copy(
+            update={
+                "name": user.display_name,
+                "role": profile.role.strip() or "OPC 创作者",
+                "city": profile.city.strip() or "线上",
+                "project_summary": profile.project_summary.strip()
+                or "正在通过个人 Agent 认识新的合作伙伴。",
+                "project_directions": [],
+                "offers": list(profile.offers) or ["开放介绍与经验交流"],
+                "needs": list(profile.needs) or ["寻找合适的连接与合作机会"],
+                "career_highlights": [],
+                "mbti": "",
+                "future_goals": [],
+                "collaboration_style": profile.collaboration_style.strip()
+                or "先相互了解，再由双方本人决定是否继续。",
+                "availability_hours_per_week": 0,
+                "ai_usage": AIUsage(
+                    monthly_token_range="未公开",
+                    monthly_budget_cny="未公开",
+                    preferred_models=[],
+                ),
+                "direction_codes": [],
+                "capability_codes": [],
+                "need_codes": [],
+                "value_codes": [],
+                "collaboration_risks": [],
+                "open_questions": ["具体合作目标与边界"],
+                "private_contact": {},
+            }
+        )
 
     def list_device_options(self, user_id: str) -> list[AgentDeviceView]:
         with self.database.session() as session:
@@ -229,20 +272,25 @@ class AgentNetworkService:
                 owner = session.get(User, device.user_id)
                 if owner is None or owner.status != "ACTIVE":
                     continue
-                profile = get_profile(device.agent_id)
+                owner_profile = session.get(UserProfile, device.user_id)
+                if owner_profile is None or not owner_profile.discoverable:
+                    continue
                 status = self._relay_status(device.agent_id)
                 metadata = status.get("metadata", {})
                 metadata = metadata if isinstance(metadata, dict) else {}
                 cards.append(
                     OnlineAgentCardView(
-                        agent_id=profile.id,
-                        name=profile.name,
-                        role=profile.role,
-                        city=profile.city,
-                        project_summary=profile.project_summary,
-                        offers=profile.offers,
-                        needs=profile.needs,
-                        collaboration_style=profile.collaboration_style,
+                        agent_id=device.agent_id,
+                        agent_name=device.name,
+                        name=owner.display_name,
+                        role=owner_profile.role.strip() or "OPC 创作者",
+                        city=owner_profile.city.strip() or "线上",
+                        project_summary=owner_profile.project_summary.strip()
+                        or "正在通过个人 Agent 认识新的合作伙伴。",
+                        offers=list(owner_profile.offers),
+                        needs=list(owner_profile.needs),
+                        collaboration_style=owner_profile.collaboration_style.strip()
+                        or "先相互了解，再由双方本人决定是否继续。",
                         online=True,
                         provider=str(metadata.get("provider")) if metadata.get("provider") else None,
                         model=str(metadata.get("model")) if metadata.get("model") else None,
@@ -279,13 +327,33 @@ class AgentNetworkService:
                 raise KeyError("Target Agent has no bound owner")
             if target.user_id == user_id or source.agent_id == target_agent_id:
                 raise ValueError("An Agent cannot introduce itself")
+            source_user = session.get(User, user_id)
+            target_user = session.get(User, target.user_id)
+            source_owner_profile = session.get(UserProfile, user_id)
+            target_owner_profile = session.get(UserProfile, target.user_id)
+            if not all(
+                (source_user, target_user, source_owner_profile, target_owner_profile)
+            ):
+                raise ValueError("Both Agent owners must have an active profile")
             target_user_id = target.user_id
             source_agent_id = str(source.agent_id)
+            source_profile = self._owner_agent_profile(
+                source_user,
+                source_owner_profile,
+                source_agent_id,
+            )
+            target_profile = self._owner_agent_profile(
+                target_user,
+                target_owner_profile,
+                target_agent_id,
+            )
 
         screening = await self.screening_service.start(
             source_agent_id,
             target_agent_id,
             use_relay=True,
+            source_profile=source_profile,
+            target_profile=target_profile,
         )
         record = AgentIntroduction(
             initiator_user_id=user_id,
@@ -354,13 +422,35 @@ class AgentNetworkService:
         record: AgentIntroduction,
         viewer_id: str,
     ) -> AgentIntroductionView:
+        source_user = session.get(User, record.initiator_user_id)
+        target_user = session.get(User, record.target_user_id)
+        source_device = session.scalar(
+            select(Device).where(Device.agent_id == record.source_agent_id)
+        )
+        target_device = session.scalar(
+            select(Device).where(Device.agent_id == record.target_agent_id)
+        )
         return AgentIntroductionView(
             id=record.id,
             screening_id=record.screening_id,
             source_agent_id=record.source_agent_id,
             target_agent_id=record.target_agent_id,
-            source_name=get_profile(record.source_agent_id).name,
-            target_name=get_profile(record.target_agent_id).name,
+            source_name=(
+                source_user.display_name
+                if source_user
+                else get_profile(record.source_agent_id).name
+            ),
+            target_name=(
+                target_user.display_name
+                if target_user
+                else get_profile(record.target_agent_id).name
+            ),
+            source_agent_name=(
+                source_device.name if source_device else record.source_agent_id
+            ),
+            target_agent_name=(
+                target_device.name if target_device else record.target_agent_id
+            ),
             goal=record.goal,
             state=record.state,
             relation_state=self._relation_state(

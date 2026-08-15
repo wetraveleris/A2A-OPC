@@ -54,6 +54,22 @@ class OPCDecisionEngine:
         self.profiles = profiles
         self.deepseek_client = deepseek_client
 
+    @staticmethod
+    def _disclosed_profile(
+        value: object,
+        fallback: AgentProfile,
+        expected_id: str,
+    ) -> AgentProfile:
+        if not isinstance(value, dict):
+            return fallback
+        if str(value.get("id", "")) != expected_id:
+            raise ValueError("Disclosed profile does not match its Agent")
+        data = dict(value)
+        data.setdefault("collaborationRisks", [])
+        data.setdefault("openQuestions", [])
+        data.setdefault("privateContact", {})
+        return AgentProfile.model_validate(data)
+
     async def respond(self, request: dict[str, Any]) -> dict[str, Any]:
         if _contains_sensitive_key(request):
             raise ValueError("Sensitive fields are not allowed in automated screening")
@@ -73,21 +89,30 @@ class OPCDecisionEngine:
         if round_number not in {1, 2, 3}:
             raise ValueError("Unsupported screening round")
 
-        sender = self.profiles[sender_id]
-        report = analyze_pair(sender, self.profile)
+        sender = self._disclosed_profile(
+            request.get("disclosedProfile"),
+            self.profiles[sender_id],
+            sender_id,
+        )
+        receiver = self._disclosed_profile(
+            request.get("recipientProfile"),
+            self.profile,
+            recipient_id,
+        )
+        report = analyze_pair(sender, receiver)
         intents = {
             1: "evaluate_collaboration",
             2: "answer_screening",
             3: "propose_introduction",
         }
         summaries = {
-            1: f"{self.profile.name}已核对项目方向、供需和协作节奏。",
-            2: f"{self.profile.name}已回应候选方的问题并标记边界。",
-            3: f"{self.profile.name}认为可以由双方本人决定是否认识。",
+            1: f"{receiver.name}的 Agent 已核对项目方向、供需和协作节奏。",
+            2: f"{receiver.name}的 Agent 已回应候选方的问题并标记边界。",
+            3: f"{receiver.name}的 Agent 认为可以由双方本人决定是否认识。",
         }
         if self.deepseek_client:
             decision, usage = await self.deepseek_client.generate_agent_decision(
-                receiver=self.profile,
+                receiver=receiver,
                 sender=sender,
                 request=request,
                 baseline=report,
@@ -125,7 +150,7 @@ class OPCDecisionEngine:
             "intent": intents[round_number],
             "summary": summary,
             "shortMessage": short_message,
-            "disclosedProfile": self.profile.a2a_packet(),
+            "disclosedProfile": receiver.a2a_packet(),
             "signals": signals,
             "decisionEngine": decision_engine,
             "humanConfirmationRequired": True,
