@@ -286,6 +286,8 @@ async def create_connection_chat_room(
             initial_context=context,
             source_profile=setup["source_profile"],
             target_profile=setup["target_profile"],
+            source_runtime=setup["source_runtime"],
+            target_runtime=setup["target_runtime"],
         )
         return await request.app.state.human_chat_service.create(chat_request)
     except KeyError as exc:

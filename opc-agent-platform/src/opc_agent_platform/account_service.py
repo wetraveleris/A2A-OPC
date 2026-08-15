@@ -796,6 +796,22 @@ class AccountService:
                 "target_agent_id": str(target_device.agent_id),
                 "source_profile": self._chat_agent_profile(source_user, source_profile, str(source_device.agent_id)),
                 "target_profile": self._chat_agent_profile(target_user, target_profile, str(target_device.agent_id)),
+                "source_runtime": {
+                    key: value
+                    for key, value in {
+                        "provider": source_device.provider or "",
+                        "model": source_device.model or "",
+                    }.items()
+                    if value
+                },
+                "target_runtime": {
+                    key: value
+                    for key, value in {
+                        "provider": target_device.provider or "",
+                        "model": target_device.model or "",
+                    }.items()
+                    if value
+                },
                 "initial_context": EmployeeChatContext(
                     goal=intro_goal,
                     known_facts=list(dict.fromkeys(known_facts)),

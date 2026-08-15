@@ -281,6 +281,8 @@ class CreateHumanChatRequest(APIModel):
     initial_context: EmployeeChatContext | None = None
     source_profile: AgentProfile | None = None
     target_profile: AgentProfile | None = None
+    source_runtime: dict[str, str] = Field(default_factory=dict)
+    target_runtime: dict[str, str] = Field(default_factory=dict)
 
 
 class HumanChatDraft(APIModel):
@@ -336,6 +338,7 @@ class HumanChatRecord(APIModel):
     topology: HumanChatTopology = HumanChatTopology.LOCAL
     connection_id: str | None = None
     agent_profiles: dict[str, AgentProfile] = Field(default_factory=dict, exclude=True)
+    agent_runtime: dict[str, dict[str, str]] = Field(default_factory=dict)
     agent_urls: dict[str, str] = Field(default_factory=dict)
     state: HumanChatState
     context: EmployeeChatContext

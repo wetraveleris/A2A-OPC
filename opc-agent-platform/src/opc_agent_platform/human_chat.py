@@ -152,6 +152,10 @@ class HumanChatService:
             topology=request.topology,
             agent_urls={source.id: source_url, target.id: target_url},
             agent_profiles={source.id: source, target.id: target},
+            agent_runtime={
+                source.id: dict(request.source_runtime),
+                target.id: dict(request.target_runtime),
+            },
             state=(
                 HumanChatState.AGENT_READY
                 if is_takeover
@@ -747,6 +751,8 @@ class HumanChatService:
             sender_profile = get_profile(sender_id)
         if recipient_profile is None:
             recipient_profile = get_profile(recipient_id)
+        sender_runtime = record.agent_runtime.get(sender_id, {})
+        recipient_runtime = record.agent_runtime.get(recipient_id, {})
         return {
             "protocol": "opc.employee_chat.v1",
             "conversationId": record.id,
@@ -757,6 +763,8 @@ class HumanChatService:
             "conversationTopic": record.goal,
             "senderProfile": sender_profile.a2a_packet(),
             "recipientProfile": recipient_profile.a2a_packet(),
+            "senderRuntime": sender_runtime,
+            "recipientRuntime": recipient_runtime,
             "recentHistory": [
                 {
                     "turn": item.turn,

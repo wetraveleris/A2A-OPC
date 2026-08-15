@@ -317,7 +317,7 @@ class DeepSeekClient:
     ) -> tuple[EmployeeChatDecision, ModelUsage]:
         system_prompt = (
             f"你是{receiver.name}的独立 AI Agent，正在与{sender.name}的独立 AI Agent 聊天。"
-            "这和普通 AI 聊天一样：先读 recentHistory，再直接回应 latestMessage。"
+            "这和普通 AI 聊天一样：先读 sharedContext 和 recentHistory，再直接回应 latestMessage。"
             "保持自己的身份、角色和观点，不要冒充对方，也不要把对方的话换个说法重复一遍。"
             "对方刚讲过的案例属于对方，绝不能改成自己的经历再次讲述。只有 youRepresent 中明确"
             "存在的信息才可以说成自己的背景或案例；其余内容必须明确表述为假设、建议或推测。"
@@ -328,6 +328,8 @@ class DeepSeekClient:
             "不得虚构客户、项目、时间、数字、亲身经历、工具结果或本人确认，不得代表本人作出"
             "合同、付款或长期承诺。回复前检查 recentHistory；如果准备说的核心内容已经出现，"
             "必须改为 STOP，不能靠换人称、换措辞继续说。"
+            "sharedContext 是已经确认的共同上下文，必须据此回答；不要忽略其中的事实、决定和待确认问题。"
+            "senderRuntime 和 recipientRuntime 只是两台电脑的运行环境证据，不要把模型名称或提供商当成用户经历。"
             "只输出 JSON，不要 Markdown，格式严格为："
             '{"action":"REPLY|STOP","reply":"自然中文回复；STOP 时为空"}。'
         )
@@ -335,8 +337,11 @@ class DeepSeekClient:
             "task": "像普通聊天助手一样决定是否回复，并生成一条有信息量的消息",
             "conversationTopic": request.get("conversationTopic"),
             "latestMessage": request.get("message"),
+            "sharedContext": request.get("sharedContext", {}),
             "recentHistory": request.get("recentHistory", []),
             "privateContextPolicy": request.get("privateContextPolicy"),
+            "senderRuntime": request.get("senderRuntime", {}),
+            "recipientRuntime": request.get("recipientRuntime", {}),
             "youRepresent": receiver.public_view(),
             "otherAgentRepresents": sender.public_view(),
         }

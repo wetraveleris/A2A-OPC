@@ -91,6 +91,41 @@ async def test_deepseek_output_rejects_contact_details() -> None:
 
 
 @pytest.mark.asyncio
+async def test_employee_chat_prompt_includes_shared_context_and_runtime_evidence() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        user_input = json.loads(payload["messages"][1]["content"])
+        assert user_input["sharedContext"]["decisions"] == ["先验证一个真实用户需求"]
+        assert user_input["sharedContext"]["openQuestions"] == ["谁负责第一版实现"]
+        assert user_input["senderRuntime"] == {"provider": "ollama", "model": "qwen3:4b"}
+        assert user_input["recipientRuntime"] == {"provider": "ollama", "model": "qwen3:1.7b"}
+        return _response({"action": "REPLY", "reply": "我会基于已确认的真实用户需求，先负责第一版实现。"})
+
+    client = DeepSeekClient(
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+    decision, _ = await client.generate_employee_chat(
+        receiver=get_profile("shen-zhiye"),
+        sender=get_profile("opc-builder"),
+        request={
+            "conversationTopic": "继续推进两周实验",
+            "message": "请回应下一步",
+            "sharedContext": {
+                "goal": "继续推进两周实验",
+                "knownFacts": ["双方已建立连接"],
+                "decisions": ["先验证一个真实用户需求"],
+                "openQuestions": ["谁负责第一版实现"],
+            },
+            "senderRuntime": {"provider": "ollama", "model": "qwen3:4b"},
+            "recipientRuntime": {"provider": "ollama", "model": "qwen3:1.7b"},
+        },
+    )
+
+    assert decision.action == "REPLY"
+
+
+@pytest.mark.asyncio
 async def test_ollama_agent_decision_uses_native_json_chat_api() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/chat"
