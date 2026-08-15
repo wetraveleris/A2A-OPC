@@ -167,11 +167,19 @@ class FriendRequestView(APIModel):
     created_at: datetime
 
 
+class ConnectionConversationView(APIModel):
+    id: str
+    message_count: int = 0
+    last_message: str | None = None
+    updated_at: datetime
+
+
 class ConnectionView(APIModel):
     id: str
     user: PublicUserView
     devices: list[dict[str, object]]
     introductions: list[dict[str, object]]
+    conversation: ConnectionConversationView | None = None
     created_at: datetime
 
 

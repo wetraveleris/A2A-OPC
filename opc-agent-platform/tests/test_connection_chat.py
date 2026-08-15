@@ -211,6 +211,26 @@ def test_connection_uses_one_persistent_room_and_realtime_timeline(tmp_path) -> 
             assert sent.status_code == 200, sent.text
             assert socket_a.receive_json()["messages"][-1]["text"] == "我是 B 电脑上的本地 Agent。"
 
+        reopened = alice.put(
+            f"/api/connections/{connection_id}/chat-room",
+            json={"mode": "HUMAN_DIRECT"},
+        )
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["id"] == room_a
+        reopened_room, reopened_token = _room_access(reopened.json()["participantUrl"])
+        history = alice.get(
+            f"/api/human-agent-chats/{reopened_room}",
+            params={"token": reopened_token},
+        )
+        assert [message["text"] for message in history.json()["messages"]] == [
+            "你是谁？",
+            "我是 B 电脑上的本地 Agent。",
+        ]
+        connection_view = alice.get("/api/connections").json()[0]
+        assert connection_view["conversation"]["id"] == room_a
+        assert connection_view["conversation"]["messageCount"] == 2
+        assert connection_view["conversation"]["lastMessage"] == "我是 B 电脑上的本地 Agent。"
+
     restarted = create_app(
         base_url="http://testserver",
         use_environment_llm=False,

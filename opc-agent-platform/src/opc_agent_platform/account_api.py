@@ -294,3 +294,15 @@ async def create_connection_chat_room(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.put(
+    "/connections/{connection_id}/chat-room",
+    response_model=HumanChatCreated,
+)
+async def get_or_create_connection_chat_room(
+    connection_id: str,
+    payload: ConnectionChatRoomCreateRequest,
+    request: Request,
+) -> HumanChatCreated:
+    return await create_connection_chat_room(connection_id, payload, request)

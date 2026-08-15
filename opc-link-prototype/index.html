@@ -1255,9 +1255,15 @@
           const card = document.createElement("article");
           card.className = "friend-card";
           const online = connection.devices?.some(device => device.status === "ONLINE");
-          card.innerHTML = '<div><h3></h3><p></p><small>' + (online ? "设备在线，可继续接入" : "设备暂未在线") + '</small></div><button class="primary continue-chat" type="button">继续沟通</button>';
+          const history = connection.conversation;
+          const historyText = history
+            ? `${history.messageCount} 条历史消息${history.lastMessage ? ` · ${history.lastMessage}` : ""}`
+            : "还没有聊天记录";
+          card.innerHTML = '<div><h3></h3><p></p><small></small></div><button class="primary continue-chat" type="button"></button>';
           card.querySelector("h3").textContent = connection.user.displayName;
           card.querySelector("p").textContent = "@" + connection.user.username;
+          card.querySelector("small").textContent = `${online ? "设备在线" : "设备暂未在线"} · ${historyText}`;
+          card.querySelector(".continue-chat").textContent = history ? "打开聊天" : "开始聊天";
           if (connection.introductions?.length) {
             card.append(introductionHistory(connection.introductions[0], "查看认识记录"));
           }
@@ -1290,8 +1296,8 @@
 
     async function openConnectionChat(connectionId) {
       try {
-        const room = await apiJson(`/api/connections/${encodeURIComponent(connectionId)}/chat-rooms`, {
-          method: "POST",
+        const room = await apiJson(`/api/connections/${encodeURIComponent(connectionId)}/chat-room`, {
+          method: "PUT",
           body: JSON.stringify({
             goal: "继续深入了解彼此的目标、能力与下一步合作可能。",
             mode: "HUMAN_DIRECT",

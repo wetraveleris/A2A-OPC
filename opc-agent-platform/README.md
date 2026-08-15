@@ -217,7 +217,8 @@ uv run opc-relay-node
 
 联系人聊天使用以下接口，A2A 只负责 Agent 托管/审核中的模型任务，不替代人工 IM：
 
-- `POST /api/connections/{connection_id}/chat-rooms`：创建或获取固定房间，重复调用返回同一个房间。
+- `PUT /api/connections/{connection_id}/chat-room`：幂等获取固定房间；不存在时只创建一次，重复进入始终返回同一个房间和历史。
+- `POST /api/connections/{connection_id}/chat-rooms`：保留给旧客户端的兼容入口。
 - `GET /api/human-agent-chats/{conversation_id}?token=...`：读取完整历史和当前模式。
 - `POST /api/human-agent-chats/{conversation_id}/messages?token=...`：人工直聊发送消息。
 - `WS /api/human-agent-chats/{conversation_id}/ws?token=...`：实时接收统一时间线；每条消息包含人工、Agent、A2A Task 信息。

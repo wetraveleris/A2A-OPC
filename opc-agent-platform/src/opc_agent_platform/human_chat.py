@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from .conversation import A2ACommunicator
 from .database import ConversationRoom, Database, utc_now
@@ -50,11 +51,19 @@ class HumanChatStore:
         self._locks: dict[str, asyncio.Lock] = {}
         self._conditions: dict[str, asyncio.Condition] = {}
 
-    async def create(self, record: HumanChatRecord) -> None:
+    async def create(self, record: HumanChatRecord) -> HumanChatRecord:
         self._records[record.id] = record
         self._locks[record.id] = asyncio.Lock()
         self._conditions[record.id] = asyncio.Condition()
-        self._persist(record)
+        try:
+            self._persist(record)
+        except IntegrityError:
+            if record.connection_id:
+                existing = self.find_by_connection(record.connection_id)
+                if existing is not None:
+                    return existing
+            raise
+        return record
 
     def find_by_connection(self, connection_id: str) -> HumanChatRecord | None:
         if self.database is None:
@@ -325,8 +334,8 @@ class HumanChatService:
                 )
             ],
         )
-        await self.store.create(record)
-        return self._created(record, source.id)
+        persisted = await self.store.create(record)
+        return self._created(persisted, source.id)
 
     def _viewer_agent_id(self, record: HumanChatRecord, token: str) -> str:
         for agent_id, expected in record.access_tokens.items():

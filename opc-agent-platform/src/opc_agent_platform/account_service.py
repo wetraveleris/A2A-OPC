@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
 from .account_models import (
+    ConnectionConversationView,
     ConnectionView,
     DiscoveryAssessmentView,
     DiscoveryProfileView,
@@ -29,6 +30,7 @@ from .account_models import (
 from .database import (
     AgentIntroduction,
     Connection,
+    ConversationRoom,
     Database,
     Device,
     FriendRequest,
@@ -659,6 +661,28 @@ class AccountService:
                     )
                     .order_by(AgentIntroduction.created_at.desc())
                 ).all()
+                room = session.scalar(
+                    select(ConversationRoom).where(
+                        ConversationRoom.connection_id == record.id
+                    )
+                )
+                conversation = None
+                if room is not None:
+                    snapshot = dict(room.record or {})
+                    messages = snapshot.get("messages", [])
+                    messages = messages if isinstance(messages, list) else []
+                    last_message = messages[-1] if messages else None
+                    last_text = (
+                        str(last_message.get("text", "")).strip()
+                        if isinstance(last_message, dict)
+                        else ""
+                    )
+                    conversation = ConnectionConversationView(
+                        id=room.id,
+                        message_count=len(messages),
+                        last_message=last_text or None,
+                        updated_at=room.updated_at,
+                    )
                 views.append(
                     ConnectionView(
                         id=record.id,
@@ -684,6 +708,7 @@ class AccountService:
                             self._introduction_summary(introduction)
                             for introduction in introductions
                         ],
+                        conversation=conversation,
                         created_at=record.created_at,
                     )
                 )
