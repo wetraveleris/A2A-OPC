@@ -10,9 +10,12 @@ test('registered user can edit profile, add work, view connections, and logout',
   await page.goto(APP_URL);
   await page.locator('#registerTab').click();
   await page.locator('#authDisplayName').fill('E2E 测试用户');
-  await page.locator('#authIdentity').fill(username);
+  await page.locator('#authIdentity').fill(username + '@example.com');
   await page.locator('#authEmail').fill(username + '@example.com');
   await page.locator('#authPassword').fill('a-long-e2e-password');
+  await page.locator('#authSubmit').click();
+  await expect(page.locator('#authError')).toContainText('这里填写用户名，不是邮箱');
+  await page.locator('#authIdentity').fill(username);
   await page.locator('#authSubmit').click();
   await expect(page.locator('#authGate')).toHaveClass(/hidden/, { timeout: 10_000 });
 

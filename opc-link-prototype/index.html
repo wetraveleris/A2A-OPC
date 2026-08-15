@@ -673,7 +673,7 @@
           </div>
           <form class="auth-form" id="authForm">
             <label id="authDisplayNameField" hidden>显示名称<input id="authDisplayName" autocomplete="name" maxlength="80"></label>
-            <label>用户名或邮箱<input id="authIdentity" autocomplete="username" required minlength="3"></label>
+            <label><span id="authIdentityLabel">用户名或邮箱</span><input id="authIdentity" autocomplete="username" required minlength="3" maxlength="320"></label>
             <label id="authEmailField" hidden>邮箱<input id="authEmail" type="email" autocomplete="email"></label>
             <label>密码<input id="authPassword" type="password" autocomplete="current-password" required minlength="10"></label>
             <p class="auth-error" id="authError" role="alert"></p>
@@ -1090,7 +1090,9 @@
       $("authEmailField").hidden = !register;
       $("authDisplayName").required = register;
       $("authEmail").required = register;
+      $("authIdentityLabel").textContent = register ? "用户名" : "用户名或邮箱";
       $("authIdentity").placeholder = register ? "用户名" : "用户名或邮箱";
+      $("authIdentity").maxLength = register ? 32 : 320;
       $("authPassword").autocomplete = register ? "new-password" : "current-password";
       $("authSubmit").textContent = register ? "创建账号" : "登录";
       $("authError").textContent = "";
@@ -1845,14 +1847,20 @@
     $("authForm").addEventListener("submit", async event => {
       event.preventDefault();
       const register = authMode === "register";
+      const identity = $("authIdentity").value.trim();
+      if (register && (identity.includes("@") || identity.includes("."))) {
+        $("authError").textContent = "这里填写用户名，不是邮箱。邮箱请填在下方邮箱字段。";
+        $("authIdentity").focus();
+        return;
+      }
       const payload = register
         ? {
-            username: $("authIdentity").value.trim(),
+            username: identity,
             email: $("authEmail").value.trim(),
             password: $("authPassword").value,
             displayName: $("authDisplayName").value.trim()
           }
-        : { identity: $("authIdentity").value.trim(), password: $("authPassword").value };
+        : { identity, password: $("authPassword").value };
       $("authError").textContent = "";
       $("authSubmit").disabled = true;
       try {

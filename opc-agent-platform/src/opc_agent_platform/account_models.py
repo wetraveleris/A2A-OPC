@@ -19,7 +19,7 @@ class RegisterRequest(APIModel):
     def validate_username(cls, value: str) -> str:
         normalized = value.strip().lower()
         if not normalized.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Username may contain letters, numbers, _ and -")
+            raise ValueError("用户名只能包含文字、数字、下划线和连字符")
         return normalized
 
     @field_validator("email")
@@ -27,7 +27,7 @@ class RegisterRequest(APIModel):
     def validate_email(cls, value: str) -> str:
         normalized = value.strip().lower()
         if normalized.count("@") != 1 or "." not in normalized.split("@", 1)[1]:
-            raise ValueError("A valid email is required")
+            raise ValueError("请输入有效的邮箱地址")
         return normalized
 
 
