@@ -38,6 +38,8 @@ from .database import (
     Work,
     utc_now,
 )
+from .models import AgentProfile, EmployeeChatContext
+from .profiles import get_profile
 
 
 SESSION_TTL = timedelta(days=30)
@@ -686,3 +688,118 @@ class AccountService:
                     )
                 )
             return views
+
+    @staticmethod
+    def _chat_agent_profile(user: User, profile: UserProfile, agent_id: str) -> AgentProfile:
+        template = get_profile(agent_id)
+        return template.model_copy(
+            update={
+                "name": user.display_name,
+                "role": profile.role.strip() or "OPC 创作者",
+                "city": profile.city.strip() or "线上",
+                "project_summary": profile.project_summary.strip()
+                or "正在通过个人 Agent 认识新的合作伙伴。",
+                "offers": list(profile.offers or []) or ["开放介绍与经验交流"],
+                "needs": list(profile.needs or []) or ["寻找合适的连接与合作机会"],
+                "collaboration_style": profile.collaboration_style.strip()
+                or "先相互了解，再由双方本人决定。",
+                "career_highlights": [],
+                "future_goals": [],
+                "project_directions": [],
+                "mbti": "",
+                "availability_hours_per_week": 0,
+                "direction_codes": [],
+                "capability_codes": [],
+                "need_codes": [],
+                "value_codes": [],
+                "collaboration_risks": [],
+                "open_questions": [],
+                "private_contact": {},
+            }
+        )
+
+    def get_connection_chat_setup(self, user_id: str, connection_id: str) -> dict[str, object]:
+        """Resolve a connected pair into the two real Agent nodes and shared history."""
+        with self.database.session() as session:
+            connection = session.get(Connection, connection_id)
+            if connection is None or user_id not in {connection.user_a_id, connection.user_b_id}:
+                raise KeyError("Connection not found")
+            other_id = (
+                connection.user_b_id
+                if connection.user_a_id == user_id
+                else connection.user_a_id
+            )
+            source_device = session.scalar(
+                select(Device)
+                .where(Device.user_id == user_id, Device.agent_id.is_not(None))
+                .order_by(Device.created_at.desc())
+            )
+            target_device = session.scalar(
+                select(Device)
+                .where(Device.user_id == other_id, Device.agent_id.is_not(None))
+                .order_by(Device.created_at.desc())
+            )
+            source_user = session.get(User, user_id)
+            target_user = session.get(User, other_id)
+            source_profile = session.get(UserProfile, user_id)
+            target_profile = session.get(UserProfile, other_id)
+            if not all((source_device, target_device, source_user, target_user, source_profile, target_profile)):
+                raise ValueError("双方都需要先绑定 Agent 运行节点")
+
+            introduction = session.scalar(
+                select(AgentIntroduction)
+                .where(
+                    or_(
+                        (AgentIntroduction.initiator_user_id == user_id)
+                        & (AgentIntroduction.target_user_id == other_id),
+                        (AgentIntroduction.initiator_user_id == other_id)
+                        & (AgentIntroduction.target_user_id == user_id),
+                    )
+                )
+                .order_by(AgentIntroduction.created_at.desc())
+            )
+            known_facts = [
+                f"{source_user.display_name}的项目：{source_profile.project_summary or '未填写'}",
+                f"{target_user.display_name}的项目：{target_profile.project_summary or '未填写'}",
+            ]
+            decisions: list[str] = []
+            open_questions = ["下一步想先深入了解哪一件事？"]
+            intro_goal = "双方已经建立连接，继续深入了解彼此的目标与合作可能。"
+            if introduction:
+                report = dict(introduction.report or {})
+                intro_goal = introduction.goal or intro_goal
+                for key, label in (("commonGround", "共同点"), ("complementarity", "互补点")):
+                    known_facts.extend(
+                        f"认识阶段{label}：{item}"
+                        for item in report.get(key, [])
+                        if str(item).strip()
+                    )
+                decisions.extend(str(item) for item in report.get("decisions", []) if str(item).strip())
+                questions = report.get("questions") or report.get("unconfirmed") or []
+                if questions:
+                    open_questions = [str(item) for item in questions if str(item).strip()]
+                for turn in (introduction.transcript or [])[-3:]:
+                    response = turn.get("response", {})
+                    if isinstance(response, dict):
+                        summary = (
+                            response.get("reply")
+                            or response.get("shortMessage")
+                            or response.get("summary")
+                        )
+                        if summary:
+                            known_facts.append(
+                                f"认识阶段第 {turn.get('round', '?')} 轮：{summary}"
+                            )
+            return {
+                "connection_id": connection_id,
+                "source_agent_id": str(source_device.agent_id),
+                "target_agent_id": str(target_device.agent_id),
+                "source_profile": self._chat_agent_profile(source_user, source_profile, str(source_device.agent_id)),
+                "target_profile": self._chat_agent_profile(target_user, target_profile, str(target_device.agent_id)),
+                "initial_context": EmployeeChatContext(
+                    goal=intro_goal,
+                    known_facts=list(dict.fromkeys(known_facts)),
+                    decisions=list(dict.fromkeys(decisions)),
+                    open_questions=list(dict.fromkeys(open_questions)),
+                ),
+            }

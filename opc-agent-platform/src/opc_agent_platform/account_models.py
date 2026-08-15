@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from .models import APIModel
+from .models import APIModel, HumanChatMode, HumanChatRunPolicy
 
 
 class RegisterRequest(APIModel):
@@ -173,3 +173,13 @@ class ConnectionView(APIModel):
     devices: list[dict[str, object]]
     introductions: list[dict[str, object]]
     created_at: datetime
+
+
+class ConnectionChatRoomCreateRequest(APIModel):
+    goal: str = Field(
+        default="继续深入了解彼此的目标、能力与下一步合作可能。",
+        min_length=1,
+        max_length=500,
+    )
+    mode: HumanChatMode = HumanChatMode.HUMAN_DIRECT
+    run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS

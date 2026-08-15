@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from .account_models import (
+    ConnectionChatRoomCreateRequest,
     ConnectionView,
     DiscoveryAssessmentView,
     DiscoveryProfileView,
@@ -17,6 +18,7 @@ from .account_models import (
     WorkView,
 )
 from .account_service import AccountService, SESSION_TTL
+from .models import CreateHumanChatRequest, HumanChatCreated, HumanChatTopology
 
 
 SESSION_COOKIE = "opc_session"
@@ -257,3 +259,36 @@ def list_connections(request: Request) -> list[ConnectionView]:
                 "ONLINE" if agent_id and relay_hub.is_online(agent_id) else "OFFLINE"
             )
     return connections
+
+
+@router.post(
+    "/connections/{connection_id}/chat-rooms",
+    response_model=HumanChatCreated,
+    status_code=201,
+)
+async def create_connection_chat_room(
+    connection_id: str,
+    payload: ConnectionChatRoomCreateRequest,
+    request: Request,
+) -> HumanChatCreated:
+    user = _current_user(request)
+    try:
+        setup = _service(request).get_connection_chat_setup(user.id, connection_id)
+        context = setup["initial_context"].model_copy(update={"goal": payload.goal.strip()})
+        chat_request = CreateHumanChatRequest(
+            from_agent_id=str(setup["source_agent_id"]),
+            to_agent_id=str(setup["target_agent_id"]),
+            goal=payload.goal.strip(),
+            run_policy=payload.run_policy,
+            mode=payload.mode,
+            topology=HumanChatTopology.RELAY_A_B,
+            connection_id=connection_id,
+            initial_context=context,
+            source_profile=setup["source_profile"],
+            target_profile=setup["target_profile"],
+        )
+        return await request.app.state.human_chat_service.create(chat_request)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

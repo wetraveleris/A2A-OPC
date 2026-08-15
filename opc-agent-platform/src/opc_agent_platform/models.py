@@ -277,6 +277,10 @@ class CreateHumanChatRequest(APIModel):
     run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
     mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
     topology: HumanChatTopology = HumanChatTopology.LOCAL
+    connection_id: str | None = None
+    initial_context: EmployeeChatContext | None = None
+    source_profile: AgentProfile | None = None
+    target_profile: AgentProfile | None = None
 
 
 class HumanChatDraft(APIModel):
@@ -330,6 +334,8 @@ class HumanChatRecord(APIModel):
     run_policy: HumanChatRunPolicy = HumanChatRunPolicy.CONTINUOUS
     mode: HumanChatMode = HumanChatMode.HUMAN_APPROVAL
     topology: HumanChatTopology = HumanChatTopology.LOCAL
+    connection_id: str | None = None
+    agent_profiles: dict[str, AgentProfile] = Field(default_factory=dict, exclude=True)
     agent_urls: dict[str, str] = Field(default_factory=dict)
     state: HumanChatState
     context: EmployeeChatContext

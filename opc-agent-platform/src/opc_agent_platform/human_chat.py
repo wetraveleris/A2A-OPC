@@ -111,8 +111,8 @@ class HumanChatService:
             raise ValueError(f"Relay Agent offline: {', '.join(offline)}")
 
     async def create(self, request: CreateHumanChatRequest) -> HumanChatCreated:
-        source = get_profile(request.from_agent_id)
-        target = get_profile(request.to_agent_id)
+        source = request.source_profile or get_profile(request.from_agent_id)
+        target = request.target_profile or get_profile(request.to_agent_id)
         if source.id == target.id:
             raise ValueError("Human Agent chat requires two different Agents")
 
@@ -125,8 +125,6 @@ class HumanChatService:
             if not target_url:
                 raise ValueError("Computer B public A2A URL is not configured")
         elif request.topology == HumanChatTopology.RELAY_A_B:
-            if source.id != "opc-builder" or target.id != "shen-zhiye":
-                raise ValueError("Relay A/B topology requires opc-builder and shen-zhiye")
             if request.mode != HumanChatMode.HUMAN_DIRECT:
                 self._require_relay_nodes_online(source.id, target.id)
             source_url = f"relay://{source.id}"
@@ -147,11 +145,13 @@ class HumanChatService:
             from_agent_id=source.id,
             to_agent_id=target.id,
             goal=request.goal.strip(),
+            connection_id=request.connection_id,
             max_turns=request.max_turns,
             run_policy=run_policy,
             mode=request.mode,
             topology=request.topology,
             agent_urls={source.id: source_url, target.id: target_url},
+            agent_profiles={source.id: source, target.id: target},
             state=(
                 HumanChatState.AGENT_READY
                 if is_takeover
@@ -159,14 +159,14 @@ class HumanChatService:
                 if is_direct
                 else HumanChatState.WAITING_OWNER_A
             ),
-            context=EmployeeChatContext(
+            context=(request.initial_context or EmployeeChatContext(
                 goal=request.goal.strip(),
                 known_facts=[
                     f"{source.name}代表的项目：{source.project_summary}",
                     f"{target.name}代表的项目：{target.project_summary}",
                 ],
                 open_questions=["双方能否形成一个明确、低风险的下一步"],
-            ),
+            )),
             pending_draft=(
                 None
                 if is_direct
@@ -213,7 +213,7 @@ class HumanChatService:
         raise PermissionError("Invalid participant access token")
 
     def _participant(self, record: HumanChatRecord, agent_id: str) -> HumanChatParticipant:
-        profile = get_profile(agent_id)
+        profile = record.agent_profiles.get(agent_id) or get_profile(agent_id)
         return HumanChatParticipant(
             side="a" if agent_id == record.from_agent_id else "b",
             agent_id=agent_id,
@@ -741,6 +741,12 @@ class HumanChatService:
         message: str,
         context: EmployeeChatContext,
     ) -> dict:
+        sender_profile = record.agent_profiles.get(sender_id)
+        recipient_profile = record.agent_profiles.get(recipient_id)
+        if sender_profile is None:
+            sender_profile = get_profile(sender_id)
+        if recipient_profile is None:
+            recipient_profile = get_profile(recipient_id)
         return {
             "protocol": "opc.employee_chat.v1",
             "conversationId": record.id,
@@ -749,6 +755,8 @@ class HumanChatService:
             "recipientAgentId": recipient_id,
             "message": message,
             "conversationTopic": record.goal,
+            "senderProfile": sender_profile.a2a_packet(),
+            "recipientProfile": recipient_profile.a2a_packet(),
             "recentHistory": [
                 {
                     "turn": item.turn,

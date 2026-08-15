@@ -194,7 +194,7 @@ class OPCDecisionEngine:
         turn = int(request.get("turn", 0))
         if recipient_id != self.profile.id:
             raise ValueError("Message recipient does not match this Agent")
-        if sender_id not in self.profiles or sender_id == self.profile.id:
+        if sender_id == self.profile.id:
             raise ValueError("Unknown or invalid sending Agent")
         if turn < 1:
             raise ValueError("Unsupported employee chat turn")
@@ -205,14 +205,23 @@ class OPCDecisionEngine:
         if not isinstance(context, dict):
             raise ValueError("Employee chat requires sharedContext")
 
-        sender = self.profiles[sender_id]
+        sender = self._disclosed_profile(
+            request.get("senderProfile") or request.get("disclosedProfile"),
+            self.profiles.get(sender_id, self.profile),
+            sender_id,
+        )
+        receiver = self._disclosed_profile(
+            request.get("recipientProfile"),
+            self.profile,
+            recipient_id,
+        )
         goal = str(context.get("goal", "这次合作"))
         facts = [str(item) for item in context.get("knownFacts", [])]
         decisions = [str(item) for item in context.get("decisions", [])]
         questions = [str(item) for item in context.get("openQuestions", [])]
         if self.deepseek_client:
             decision, usage = await self.deepseek_client.generate_employee_chat(
-                receiver=self.profile,
+                receiver=receiver,
                 sender=sender,
                 request=request,
             )
@@ -226,13 +235,13 @@ class OPCDecisionEngine:
             }
         elif turn == 1:
             reply = (
-                f"你好，我是{self.profile.name}的 Agent。围绕“{goal}”，"
-                f"我能提供{self.profile.offers[0]}和{self.profile.offers[1]}，"
+                f"你好，我是{receiver.name}的 Agent。围绕“{goal}”，"
+                f"我能提供{receiver.offers[0]}和{receiver.offers[1]}，"
                 f"也想确认你这边更看重哪一个具体结果。"
             )
             patch = {
                 "knownFactsAdd": [
-                    f"{self.profile.name}可提供：{self.profile.offers[0]}、{self.profile.offers[1]}"
+                    f"{receiver.name}可提供：{receiver.offers[0]}、{receiver.offers[1]}"
                 ],
                 "openQuestionsAdd": ["这次合作优先验证哪个具体结果"],
             }
@@ -240,8 +249,8 @@ class OPCDecisionEngine:
             action = "REPLY"
         elif turn == 2:
             reply = (
-                f"我理解了。{self.profile.name}这边更适合先把{goal}拆成一个小实验，"
-                f"由我负责{self.profile.offers[0]}，再用真实反馈判断是否继续。"
+                f"我理解了。{receiver.name}这边更适合先把{goal}拆成一个小实验，"
+                f"由我负责{receiver.offers[0]}，再用真实反馈判断是否继续。"
             )
             patch = {
                 "decisionsAdd": ["先用一个小实验验证合作价值"],
