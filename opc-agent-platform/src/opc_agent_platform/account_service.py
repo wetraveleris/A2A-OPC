@@ -38,7 +38,7 @@ from .database import (
     Work,
     utc_now,
 )
-from .models import AgentProfile, EmployeeChatContext
+from .models import AIUsage, AgentProfile, EmployeeChatContext
 from .profiles import get_profile
 
 
@@ -690,7 +690,12 @@ class AccountService:
             return views
 
     @staticmethod
-    def _chat_agent_profile(user: User, profile: UserProfile, agent_id: str) -> AgentProfile:
+    def _chat_agent_profile(
+        user: User,
+        profile: UserProfile,
+        device: Device,
+    ) -> AgentProfile:
+        agent_id = str(device.agent_id)
         template = get_profile(agent_id)
         return template.model_copy(
             update={
@@ -708,6 +713,11 @@ class AccountService:
                 "project_directions": [],
                 "mbti": "",
                 "availability_hours_per_week": 0,
+                "ai_usage": AIUsage(
+                    monthly_token_range="未公开",
+                    monthly_budget_cny="未公开",
+                    preferred_models=[device.model] if device.model else [],
+                ),
                 "direction_codes": [],
                 "capability_codes": [],
                 "need_codes": [],
@@ -794,8 +804,8 @@ class AccountService:
                 "connection_id": connection_id,
                 "source_agent_id": str(source_device.agent_id),
                 "target_agent_id": str(target_device.agent_id),
-                "source_profile": self._chat_agent_profile(source_user, source_profile, str(source_device.agent_id)),
-                "target_profile": self._chat_agent_profile(target_user, target_profile, str(target_device.agent_id)),
+                "source_profile": self._chat_agent_profile(source_user, source_profile, source_device),
+                "target_profile": self._chat_agent_profile(target_user, target_profile, target_device),
                 "source_runtime": {
                     key: value
                     for key, value in {
