@@ -16,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from .a2a_runtime import mount_a2a_agents
 from .account_api import router as account_router
 from .account_service import AccountService
+from .agent_network import AgentNetworkService
+from .agent_network_api import router as agent_network_router
 from .conversation import A2ACommunicator, ScreeningService
 from .database import Database
 from .deepseek import DeepSeekClient
@@ -88,10 +90,12 @@ def create_app(
         base_url=resolved_base_url,
         transport=a2a_transport,
     )
+    relay_hub = RelayHub(token=os.getenv("OPC_RELAY_TOKEN", ""))
     screening_service = ScreeningService(
         store=store,
         communicator=communicator,
         deepseek_client=resolved_deepseek_client,
+        relay_hub=relay_hub,
     )
     internet_a2a_service = InternetA2AService(communicator=communicator)
     employee_chat_store = EmployeeChatStore()
@@ -100,7 +104,6 @@ def create_app(
         communicator=communicator,
     )
     human_chat_store = HumanChatStore()
-    relay_hub = RelayHub(token=os.getenv("OPC_RELAY_TOKEN", ""))
     human_chat_service = HumanChatService(
         store=human_chat_store,
         communicator=communicator,
@@ -109,6 +112,12 @@ def create_app(
     database = Database(database_url)
     database.create_schema()
     account_service = AccountService(database)
+    agent_network_service = AgentNetworkService(
+        database=database,
+        relay_hub=relay_hub,
+        screening_service=screening_service,
+        account_service=account_service,
+    )
     app.state.screening_store = store
     app.state.screening_service = screening_service
     app.state.internet_a2a_service = internet_a2a_service
@@ -119,7 +128,9 @@ def create_app(
     app.state.relay_hub = relay_hub
     app.state.database = database
     app.state.account_service = account_service
+    app.state.agent_network_service = agent_network_service
     app.include_router(account_router)
+    app.include_router(agent_network_router)
 
     @app.get("/api/relay/agents")
     async def relay_agents() -> list[dict[str, object]]:
@@ -467,10 +478,7 @@ def create_app(
     )
 
     workspace_root = Path(__file__).resolve().parents[3]
-    video_dir = workspace_root / "视频"
     prototype_dir = workspace_root / "opc-link-prototype"
-    if video_dir.is_dir():
-        app.mount("/视频", StaticFiles(directory=video_dir), name="videos")
     if prototype_dir.is_dir():
         app.mount("/app", StaticFiles(directory=prototype_dir, html=True), name="prototype")
 

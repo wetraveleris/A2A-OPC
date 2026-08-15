@@ -175,6 +175,32 @@ class Connection(Base):
     )
 
 
+class AgentIntroduction(Base):
+    __tablename__ = "agent_introductions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    initiator_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    target_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    source_agent_id: Mapped[str] = mapped_column(String(100), index=True)
+    target_agent_id: Mapped[str] = mapped_column(String(100), index=True)
+    screening_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    goal: Mapped[str] = mapped_column(String(500))
+    state: Mapped[str] = mapped_column(String(30), default="WAITING_APPROVAL")
+    report: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    transcript: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    friend_request_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class Database:
     def __init__(self, url: str | None = None) -> None:
         self.url = url or os.getenv(

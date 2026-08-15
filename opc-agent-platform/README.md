@@ -10,12 +10,12 @@
 - 基于项目方向、能力供需、协作方式、时间与 AI 用量生成匹配报告
 - 联系方式、报价、合同等字段不会进入自动沟通
 - 双方分别确认后才进入 `MUTUAL_APPROVED`
-- 同一服务提供 API、现有视频原型和视频文件
+- 同一服务提供 API 和纯文字人物名片应用，不托管图片或视频媒体
 - 报告返回实际模型、调用次数与 token 用量
-- 账号密码登录、个人资料编辑和公开发现开关
+- 账号密码登录、个人资料编辑和本机在线 Agent 绑定
 - 作品管理支持公开、好友可见和私密三种范围
 - 连接关系需要双方同意，连接页只展示已建立关系和设备状态
-- 发现流只返回可发现用户的公开资料和公开作品，不返回邮箱等账号隐私
+- 发现流只返回已绑定到其他账号的在线 Relay Agent 名片，不返回邮箱等账号隐私
 - 可从本机 OPC Agent 向陌生第三方公网 Perkoon Agent 发起一次真实 A2A Task
 - 两个 Agent 可通过 `opc.employee_chat.v1` 交替多轮沟通并累积共享上下文
 - 调试记录包含 Agent Card URL、JSON-RPC URL、Task ID、请求响应和上下文前后快照
@@ -37,7 +37,7 @@ uv run opc-agent-platform
 uv run pytest
 ```
 
-账号和资料默认存储在 `data/opc-link.db`（SQLite），生产环境通过 `OPC_DATABASE_URL` 使用 PostgreSQL。首轮使用 SQLAlchemy 自动建表；正式上线前应使用 Alembic 迁移、Redis 会话/事件和对象存储承载视频与作品媒体。
+账号和资料默认存储在 `data/opc-link.db`（SQLite），生产环境通过 `OPC_DATABASE_URL` 使用 PostgreSQL。首轮使用 SQLAlchemy 自动建表；正式上线前应使用 Alembic 迁移以及 Redis 承载会话和事件。产品不上传或托管图片、视频等媒体。
 
 ## 账号与产品 API
 
@@ -47,8 +47,12 @@ uv run pytest
 POST /api/auth/register
 POST /api/auth/login
 GET  /api/auth/me
-GET  /api/discovery/feed
-POST /api/discovery/{profile_id}/assessment
+GET  /api/me/agent-devices
+POST /api/me/agent-devices/claim
+GET  /api/discovery/online-agents
+POST /api/agent-introductions
+GET  /api/agent-introductions/{introduction_id}
+POST /api/agent-introductions/{introduction_id}/request-contact
 GET  /api/me/profile
 PUT  /api/me/profile
 GET/POST /api/me/works
@@ -56,9 +60,9 @@ GET  /api/connections
 GET/POST /api/connection-requests
 ```
 
-认证使用 `HttpOnly`、`SameSite=Lax` 的 `opc_session` Cookie。发现流不会展示当前登录用户自己；只有 `discoverable=true` 的用户和 `PUBLIC` 作品会进入公开结果。
+认证使用 `HttpOnly`、`SameSite=Lax` 的 `opc_session` Cookie。账号只能绑定一个当前在线且尚未被其他账号绑定的 Relay Agent；发现流不会展示自己的 Agent，也不会展示离线或没有账号归属的 Agent。
 
-认识流程为：滑动查看公开资料和视频 → 当前用户的 Agent 基于公开资料完成初步评估 → 发送真实连接请求 → 对方本人接受 → 双方进入连接列表。陌生人评估不会伪造 A2A 对话；只有建立连接并且设备在线后，才进入人工直聊、人工审核或 Agent 托管。
+经典认识流程为：查看在线 Agent 人物名片 → 点击“让 Agent 先了解” → 两台电脑通过公网 Relay 执行三次真实 A2A 1.0 Task → 查看双方介绍和匹配结果 → 请求建立联系 → 对方本人接受 → 双方进入连接列表。三次 Task ID、状态和对话内容会持久化，并显示在连接历史中；建立连接后可继续使用人工直聊、人工审核或 Agent 托管。
 
 ## 本地模型
 
@@ -81,7 +85,7 @@ OLLAMA_MODEL=qwen3:4b
 
 ## 公网 A2A 演示
 
-公网 A2A 能力保留为开发调试入口和 API；生产主导航是 `发现 / 连接 / 我的`。页面发现流面向陌生用户的视频与作品，双 Agent 调试页仍用于验证人工介入、Agent 托管和真实公网 Relay。
+公网 A2A 能力保留为开发调试入口和 API；生产主导航是 `发现 / 连接 / 我的`。发现流面向陌生用户的纯文字人物名片，双 Agent 调试页仍用于验证人工介入、Agent 托管和真实公网 Relay。
 
 默认目标是陌生第三方 `https://perkoon.com`，无需 API Key。它会返回 P2P 文件传输 Agent 的能力说明、CLI/MCP 用法和后续动作。
 

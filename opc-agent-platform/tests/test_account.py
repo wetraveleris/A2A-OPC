@@ -67,6 +67,13 @@ async def test_account_profile_works_and_connections_are_persistent(
         assert discovery.json()[0]["username"] == "alice-opc"
         assert discovery.json()[0]["works"][0]["title"] == "Agent 协作原型"
         assert "email" not in discovery.json()[0]
+        assert "avatarUrl" not in discovery.json()[0]
+        assert "introVideoUrl" not in discovery.json()[0]
+        assert "coverUrl" not in discovery.json()[0]["works"][0]
+        assert "videoUrl" not in discovery.json()[0]["works"][0]
+
+        media_route = await bob.get("/视频/121311_5b97ff14ca15b2db.mp4")
+        assert media_route.status_code == 404
 
         assert (await alice.post("/api/schedule-inquiries", json={})).status_code == 404
 

@@ -248,4 +248,12 @@ def decline_connection_request(
 @router.get("/connections", response_model=list[ConnectionView])
 def list_connections(request: Request) -> list[ConnectionView]:
     user = _current_user(request)
-    return _service(request).list_connections(user.id)
+    connections = _service(request).list_connections(user.id)
+    relay_hub = request.app.state.relay_hub
+    for connection in connections:
+        for device in connection.devices:
+            agent_id = str(device.get("agentId") or "")
+            device["status"] = (
+                "ONLINE" if agent_id and relay_hub.is_online(agent_id) else "OFFLINE"
+            )
+    return connections

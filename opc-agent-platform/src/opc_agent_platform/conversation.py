@@ -28,6 +28,7 @@ from .models import (
     TranscriptTurn,
 )
 from .profiles import get_profile
+from .relay import RelayHub
 from .store import ScreeningStore
 
 
@@ -294,20 +295,33 @@ class ScreeningService:
         store: ScreeningStore,
         communicator: A2ACommunicator,
         deepseek_client: DeepSeekClient | None = None,
+        relay_hub: RelayHub | None = None,
     ) -> None:
         self.store = store
         self.communicator = communicator
         self.deepseek_client = deepseek_client
+        self.relay_hub = relay_hub
 
     async def start(
         self,
         from_agent_id: str,
         to_agent_id: str,
+        use_relay: bool = False,
     ) -> ScreeningRecord:
         source = get_profile(from_agent_id)
         target = get_profile(to_agent_id)
         if source.id == target.id:
             raise ValueError("An Agent cannot screen itself")
+        if use_relay:
+            if self.relay_hub is None:
+                raise ValueError("Relay is not available")
+            offline = [
+                agent_id
+                for agent_id in (source.id, target.id)
+                if not self.relay_hub.is_online(agent_id)
+            ]
+            if offline:
+                raise ValueError(f"Relay Agent offline: {', '.join(offline)}")
 
         record = await self.store.create(source.id, target.id)
         await self.store.set_state(record.id, ScreeningState.SCREENING)
@@ -320,7 +334,9 @@ class ScreeningService:
                 "introduce_opc",
                 source.a2a_packet(),
             )
-            first_response = await self._exchange(record.id, first_request)
+            first_response = await self._exchange(
+                record.id, first_request, use_relay=use_relay
+            )
 
             second_request = self._request(
                 record.id,
@@ -331,7 +347,9 @@ class ScreeningService:
                 target.a2a_packet(),
                 first_response,
             )
-            second_response = await self._exchange(record.id, second_request)
+            second_response = await self._exchange(
+                record.id, second_request, use_relay=use_relay
+            )
 
             third_request = self._request(
                 record.id,
@@ -342,7 +360,7 @@ class ScreeningService:
                 source.a2a_packet(),
                 second_response,
             )
-            await self._exchange(record.id, third_request)
+            await self._exchange(record.id, third_request, use_relay=use_relay)
 
             completed = await self.store.get(record.id)
             baseline = analyze_pair(source, target)
@@ -389,13 +407,22 @@ class ScreeningService:
         self,
         screening_id: str,
         request: dict[str, Any],
+        use_relay: bool = False,
     ) -> dict[str, Any]:
         await self.store.set_state(
             screening_id, ScreeningState.WAITING_REMOTE_AGENT
         )
-        task_id, task_state, response = await self.communicator.send(
-            str(request["recipientAgentId"]), request
-        )
+        recipient_id = str(request["recipientAgentId"])
+        if use_relay:
+            if self.relay_hub is None:
+                raise ValueError("Relay is not available")
+            task_id, task_state, response = await self.relay_hub.dispatch(
+                recipient_id, request
+            )
+        else:
+            task_id, task_state, response = await self.communicator.send(
+                recipient_id, request
+            )
         await self.store.add_turn(
             screening_id,
             TranscriptTurn(

@@ -27,6 +27,7 @@ from .account_models import (
     WorkView,
 )
 from .database import (
+    AgentIntroduction,
     Connection,
     Database,
     Device,
@@ -90,8 +91,6 @@ class AccountService:
             needs=list(profile.needs or []),
             collaboration_style=profile.collaboration_style,
             languages=list(profile.languages or []),
-            avatar_url=profile.avatar_url,
-            intro_video_url=profile.intro_video_url,
             discoverable=profile.discoverable,
             updated_at=profile.updated_at,
         )
@@ -105,14 +104,25 @@ class AccountService:
             role=work.role,
             status=work.status,
             visibility=work.visibility,
-            cover_url=work.cover_url,
-            video_url=work.video_url,
             links=list(work.links or []),
             skills=list(work.skills or []),
             sort_order=work.sort_order,
             created_at=work.created_at,
             updated_at=work.updated_at,
         )
+
+    @staticmethod
+    def _introduction_summary(record: AgentIntroduction) -> dict[str, object]:
+        return {
+            "id": record.id,
+            "sourceAgentId": record.source_agent_id,
+            "targetAgentId": record.target_agent_id,
+            "goal": record.goal,
+            "state": record.state,
+            "report": dict(record.report or {}),
+            "transcript": list(record.transcript or []),
+            "createdAt": record.created_at.isoformat(),
+        }
 
     def _issue_session(self, session, user_id: str) -> str:
         token = secrets.token_urlsafe(40)
@@ -302,8 +312,6 @@ class AccountService:
                         needs=list(profile.needs or []),
                         collaboration_style=profile.collaboration_style,
                         languages=list(profile.languages or []),
-                        avatar_url=profile.avatar_url,
-                        intro_video_url=profile.intro_video_url,
                         works=[self._work_view(work) for work in works],
                         relation_state=self._relation_state(
                             session,
@@ -509,12 +517,24 @@ class AccountService:
             )
             if pending:
                 raise ValueError("A connection request is already pending")
-            record = FriendRequest(
-                sender_user_id=user_id,
-                recipient_user_id=target.id,
-                message=request.message.strip(),
+            record = session.scalar(
+                select(FriendRequest).where(
+                    FriendRequest.sender_user_id == user_id,
+                    FriendRequest.recipient_user_id == target.id,
+                )
             )
-            session.add(record)
+            if record is None:
+                record = FriendRequest(
+                    sender_user_id=user_id,
+                    recipient_user_id=target.id,
+                    message=request.message.strip(),
+                )
+                session.add(record)
+            else:
+                record.status = "PENDING"
+                record.message = request.message.strip()
+                record.created_at = utc_now()
+                record.responded_at = None
             session.commit()
             session.refresh(record)
             return FriendRequestView(
@@ -523,6 +543,7 @@ class AccountService:
                 user=self._public_user_view(target),
                 status=record.status,
                 message=record.message,
+                introduction=None,
                 created_at=record.created_at,
             )
 
@@ -546,6 +567,11 @@ class AccountService:
                 )
                 other = session.get(User, other_id)
                 if other:
+                    introduction = session.scalar(
+                        select(AgentIntroduction).where(
+                            AgentIntroduction.friend_request_id == record.id
+                        )
+                    )
                     views.append(
                         FriendRequestView(
                             id=record.id,
@@ -553,6 +579,11 @@ class AccountService:
                             user=self._public_user_view(other),
                             status=record.status,
                             message=record.message,
+                            introduction=(
+                                self._introduction_summary(introduction)
+                                if introduction
+                                else None
+                            ),
                             created_at=record.created_at,
                         )
                     )
@@ -575,6 +606,14 @@ class AccountService:
             if accept:
                 pair = sorted([record.sender_user_id, record.recipient_user_id])
                 session.add(Connection(user_a_id=pair[0], user_b_id=pair[1]))
+                introduction = session.scalar(
+                    select(AgentIntroduction).where(
+                        AgentIntroduction.friend_request_id == record.id
+                    )
+                )
+                if introduction:
+                    introduction.state = "CONNECTED"
+                    introduction.updated_at = utc_now()
             session.commit()
 
     def list_connections(self, user_id: str) -> list[ConnectionView]:
@@ -602,6 +641,22 @@ class AccountService:
                 devices = session.scalars(
                     select(Device).where(Device.user_id == other_id)
                 ).all()
+                introductions = session.scalars(
+                    select(AgentIntroduction)
+                    .where(
+                        or_(
+                            (
+                                (AgentIntroduction.initiator_user_id == user_id)
+                                & (AgentIntroduction.target_user_id == other_id)
+                            ),
+                            (
+                                (AgentIntroduction.initiator_user_id == other_id)
+                                & (AgentIntroduction.target_user_id == user_id)
+                            ),
+                        )
+                    )
+                    .order_by(AgentIntroduction.created_at.desc())
+                ).all()
                 views.append(
                     ConnectionView(
                         id=record.id,
@@ -622,6 +677,10 @@ class AccountService:
                                 ),
                             }
                             for device in devices
+                        ],
+                        introductions=[
+                            self._introduction_summary(introduction)
+                            for introduction in introductions
                         ],
                         created_at=record.created_at,
                     )

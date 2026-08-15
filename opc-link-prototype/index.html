@@ -149,15 +149,65 @@
     @keyframes enter { from { opacity: .2; transform: translateY(5px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .view.active { animation: none; } * { scroll-behavior: auto !important; } }
 
-    .discover { background: var(--dark); color: var(--white); }
-    .video-stage { position: absolute; inset: 0; overflow: hidden; background: #1b1c19; touch-action: pan-y; }
-    .candidate-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.01); }
-    .video-vignette {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom, rgba(9,10,8,.18) 0%, transparent 26%, transparent 48%, rgba(9,10,8,.42) 62%, rgba(9,10,8,.9) 76%, rgba(9,10,8,.98) 100%);
-      pointer-events: none;
+    .discover { background: #edf0e9; color: var(--ink); }
+    .card-stage { position: absolute; inset: 0; padding: 112px 18px 104px; touch-action: pan-y; }
+    .person-card {
+      position: relative;
+      height: 100%;
+      min-height: 0;
+      padding: 21px 20px 18px;
+      border: 1px solid #cfd4c8;
+      border-top: 4px solid #667b31;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 16px 40px rgba(45, 51, 37, .09);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: transform .24s cubic-bezier(.16,1,.3,1), opacity .2s ease;
     }
+    .person-card.changing { transform: translateY(8px); opacity: .55; }
+    .card-meta { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .signal { margin: 0; padding: 0; border: 0; background: transparent; color: #5d712d; font-size: 11px; font-weight: 750; text-align: left; }
+    .pager { color: var(--muted); font: 700 10px/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace; }
+    .identity-mark {
+      width: 64px;
+      height: 64px;
+      margin: 25px 0 19px;
+      border: 1px solid #aeb8a0;
+      display: grid;
+      place-items: center;
+      color: #3f5120;
+      font-size: 22px;
+      font-weight: 720;
+    }
+    .candidate-copy { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+    .candidate-copy::-webkit-scrollbar { display: none; }
+    .candidate-name { margin: 0; font-size: 31px; line-height: 1.08; font-weight: 680; }
+    .candidate-role { margin: 7px 0 20px; color: var(--muted); font-size: 13px; }
+    .candidate-project { margin: 0; font-size: 17px; line-height: 1.45; }
+    .card-divider { height: 1px; margin: 20px 0 17px; background: var(--line); }
+    .supply { margin: 0; display: grid; gap: 13px; font-size: 13px; line-height: 1.5; }
+    .supply-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 9px; }
+    .supply strong { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .card-actions { margin-top: auto; padding-top: 18px; display: grid; grid-template-columns: 1fr 1.45fr; gap: 8px; }
+    .card-actions button { min-height: 45px; border-radius: 7px; font-size: 12px; font-weight: 700; }
+    .card-save {
+      width: 40px;
+      height: 40px;
+      position: absolute;
+      top: 48px;
+      right: 18px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: transparent;
+      color: var(--muted);
+    }
+    .card-save.active { border-color: #667b31; background: #e5ebd9; color: #4b5e24; }
+    .card-save:disabled, .signal:disabled { opacity: .45; cursor: default; }
+    .card-save svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
     .topbar {
       position: absolute;
       z-index: 4;
@@ -170,51 +220,10 @@
       align-items: center;
     }
     .topbrand { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 750; }
-    .topbrand .mark { background: var(--acid); }
-    .icon-button {
-      width: 44px;
-      height: 44px;
-      display: grid;
-      place-items: center;
-      color: inherit;
-      background: rgba(12,13,11,.34);
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 50%;
-      backdrop-filter: blur(10px);
-    }
-    .icon-button svg, .round-action svg, .tab svg, .back svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-    .sound-off .sound-wave { display: none; }
-    .pager { position: absolute; z-index: 4; top: 107px; right: 20px; display: flex; flex-direction: column; gap: 5px; }
-    .pager span { width: 3px; height: 13px; border-radius: 3px; background: rgba(255,255,255,.35); transition: height .2s, background .2s; }
-    .pager span.active { height: 25px; background: var(--acid); }
-    .candidate-copy {
-      position: absolute;
-      z-index: 4;
-      left: 20px;
-      right: 88px;
-      bottom: 124px;
-      text-shadow: 0 1px 12px rgba(0,0,0,.25);
-    }
-    .signal { color: var(--acid); font-size: 12px; font-weight: 750; margin: 0 0 8px; }
-    .candidate-name { margin: 0; font-size: 30px; line-height: 1.08; font-weight: 680; }
-    .candidate-role { margin: 7px 0 15px; font-size: 14px; color: rgba(255,255,255,.76); }
-    .candidate-project { margin: 0; font-size: 16px; line-height: 1.35; max-width: 16em; }
-    .supply { margin: 13px 0 0; font-size: 13px; color: rgba(255,255,255,.76); line-height: 1.55; }
-    .supply strong { color: #fff; font-weight: 600; }
-    .side-actions { position: absolute; z-index: 5; right: 15px; bottom: 111px; display: grid; gap: 14px; }
-    .round-action {
-      width: 54px;
-      min-height: 54px;
-      border: 0;
-      border-radius: 50%;
-      background: rgba(18,19,16,.62);
-      color: #fff;
-      display: grid;
-      place-items: center;
-      backdrop-filter: blur(12px);
-    }
-    .round-action.active { background: var(--acid); color: var(--dark); }
-    .round-action:active, .primary:active, .secondary:active { transform: scale(.97); }
+    .topbrand .mark { background: #667b31; }
+    .topbar-note { color: var(--muted); font-size: 10px; font-weight: 650; }
+    .tab svg, .back svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .card-actions button:active, .card-save:active, .primary:active, .secondary:active { transform: scale(.97); }
     .tabbar {
       position: absolute;
       z-index: 7;
@@ -230,7 +239,7 @@
       min-height: 50px;
       border: 0;
       background: transparent;
-      color: rgba(255,255,255,.62);
+      color: #8b8d86;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -238,8 +247,8 @@
       gap: 3px;
       font-size: 10px;
     }
-    .tab.active { color: #fff; font-weight: 650; }
-    .tab.active::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--acid); position: absolute; bottom: 2px; }
+    .tab.active { color: var(--ink); font-weight: 650; }
+    .tab.active::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #667b31; position: absolute; bottom: 2px; }
     .tab.light { color: #8b8d86; }
     .tab.light.active { color: var(--ink); }
     .tabbar.light { color: var(--ink); border-top: 1px solid var(--line); background: rgba(245,245,240,.93); backdrop-filter: blur(20px); }
@@ -291,6 +300,11 @@
     .work-card h3, .friend-card h3, .request-card h3 { margin: 0 0 4px; font-size: 14px; }
     .work-card p, .friend-card p, .request-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
     .work-card button { min-width: 44px; min-height: 36px; border: 0; background: transparent; color: #a7453d; font-size: 12px; }
+    .device-bind { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .device-bind select { min-width: 0; }
+    .device-bind button { min-height: 45px; padding: 0 13px; border-radius: 7px; }
+    .device-state { margin: 10px 0 0 !important; color: var(--muted); font-size: 11px !important; line-height: 1.5; }
+    .device-state.online { color: #596a2d; }
     .empty-state { padding: 26px 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
     .friends { background: var(--paper); }
     .friends-head { padding: 57px 20px 16px; }
@@ -301,10 +315,15 @@
     .friend-group { padding: 17px 0; border-top: 1px solid var(--line); }
     .friend-group h2 { margin: 0 0 11px; font-size: 12px; color: var(--muted); font-weight: 600; }
     .friend-list { display: grid; gap: 9px; }
-    .friend-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .friend-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
     .friend-card small { display: block; margin-top: 5px; color: #6e852f; font-size: 10px; }
     .request-actions { display: flex; gap: 7px; margin-top: 10px; }
     .request-actions button { min-height: 35px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+    .intro-history { width: 100%; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+    .intro-history summary { cursor: pointer; color: #596a2d; font-size: 11px; font-weight: 700; }
+    .intro-history ol { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+    .intro-history li { padding-left: 9px; border-left: 2px solid #cbd5b3; color: #4d5048; font-size: 11px; line-height: 1.5; }
+    .intro-history code { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; overflow-wrap: anywhere; }
 
     .sheet {
       position: absolute;
@@ -413,11 +432,11 @@
     .secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
     .primary:disabled { opacity: .52; cursor: default; }
 
-    .profile-hero { position: relative; height: 300px; flex: none; background: #2a2b27; overflow: hidden; }
-    .profile-hero video { width: 100%; height: 100%; object-fit: cover; }
-    .profile-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.16), transparent 55%, rgba(0,0,0,.5)); pointer-events: none; }
-    .profile-back { position: absolute; z-index: 3; top: 51px; left: 13px; color: white; background: rgba(0,0,0,.25); border-radius: 50%; }
-    .profile-body { margin-top: -1px; padding-top: 20px; }
+    .profile-identity { position: relative; min-height: 235px; padding: 103px 20px 24px; flex: none; background: #e8ece2; border-bottom: 1px solid #d1d7ca; }
+    .profile-identity .identity-mark { margin: 0; width: 70px; height: 70px; background: var(--surface); }
+    .profile-back { position: absolute; z-index: 3; top: 51px; left: 13px; color: var(--ink); background: transparent; border-radius: 50%; }
+    .profile-verified { position: absolute; right: 20px; bottom: 25px; color: #5d712d; font-size: 10px; font-weight: 700; }
+    .profile-body { padding-top: 20px; }
     .profile-name { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     .profile-name h1 { font-size: 29px; margin: 0; }
     .profile-name span { font-size: 12px; color: var(--muted); }
@@ -645,9 +664,9 @@
       <h1>先看方向，<br>再决定认识。</h1>
       <p>让 Agent 在后台完成初步了解。你只需要浏览、收藏，或决定是否认识。</p>
       <div class="hint-list">
-        <div class="hint"><span>上下滑动</span><span>切换 OPC</span></div>
-        <div class="hint"><span>点击画面</span><span>播放 / 暂停</span></div>
-        <div class="hint"><span>Agent 先聊</span><span>获取匹配摘要</span></div>
+        <div class="hint"><span>上下滑动</span><span>切换人物</span></div>
+        <div class="hint"><span>详细名片</span><span>查看公开项目</span></div>
+        <div class="hint"><span>Agent 了解</span><span>获取匹配摘要</span></div>
       </div>
     </aside>
 
@@ -682,39 +701,40 @@
         </section>
 
         <main class="view discover active" id="discoverView" data-view="discover">
-          <section class="video-stage" id="videoStage" aria-label="OPC 推荐视频，向上或向下滑动切换">
-            <video class="candidate-video" id="candidateVideo" muted playsinline loop preload="metadata"></video>
-            <div class="video-vignette"></div>
-          </section>
           <div class="topbar">
             <div class="topbrand"><span class="mark"></span> OPC LINK</div>
-            <button class="icon-button sound-off" id="soundButton" aria-label="开启声音">
-              <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-wave" d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/><path class="mute-line" d="m16 10 5 5m0-5-5 5"/></svg>
-            </button>
+            <span class="topbar-note">A2A 1.0 · 在线 Agent</span>
           </div>
-          <div class="pager" id="pager" aria-hidden="true"></div>
-          <div class="candidate-copy">
-            <p class="signal" id="candidateSignal"></p>
-            <h1 class="candidate-name" id="candidateName"></h1>
-            <p class="candidate-role" id="candidateRole"></p>
-            <p class="candidate-project" id="candidateProject"></p>
-            <p class="supply"><strong>提供</strong> <span id="candidateOffers"></span><br><strong>寻找</strong> <span id="candidateNeeds"></span></p>
-          </div>
-          <div class="side-actions">
-            <button class="round-action" id="saveButton" aria-label="收藏此人">
-              <svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4Z"/></svg>
-            </button>
-            <button class="round-action" id="profileButton" aria-label="查看个人空间">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>
-            </button>
-            <button class="round-action active" id="agentButton" aria-label="让 Agent 先了解">
-              <svg viewBox="0 0 24 24"><path d="M5 18 3 21v-5a8 8 0 1 1 3 3"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>
-            </button>
-          </div>
-          <nav class="tabbar" aria-label="主导航">
-            <button class="tab active" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
-            <button class="tab" data-go="friends"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
-            <button class="tab" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
+          <section class="card-stage" id="cardStage" aria-label="OPC 人物名片，向上或向下滑动切换">
+            <article class="person-card" id="personCard">
+              <div class="card-meta">
+                <button class="signal" id="candidateSignal" type="button"></button>
+                <span class="pager" id="pager" aria-label="当前名片位置"></span>
+              </div>
+              <button class="card-save" id="saveButton" aria-label="收藏此人">
+                <svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4Z"/></svg>
+              </button>
+              <div class="identity-mark" id="candidateMonogram" aria-hidden="true"></div>
+              <div class="candidate-copy">
+                <h1 class="candidate-name" id="candidateName"></h1>
+                <p class="candidate-role" id="candidateRole"></p>
+                <p class="candidate-project" id="candidateProject"></p>
+                <div class="card-divider"></div>
+                <div class="supply">
+                  <div class="supply-row"><strong>提供</strong><span id="candidateOffers"></span></div>
+                  <div class="supply-row"><strong>寻找</strong><span id="candidateNeeds"></span></div>
+                </div>
+              </div>
+              <div class="card-actions">
+                <button class="secondary" id="profileButton" type="button">详细名片</button>
+                <button class="primary" id="agentButton" type="button">让 Agent 先了解</button>
+              </div>
+            </article>
+          </section>
+          <nav class="tabbar light" aria-label="主导航">
+            <button class="tab light active" data-go="discover"><svg viewBox="0 0 24 24"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z"/></svg>发现</button>
+            <button class="tab light" data-go="friends"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><circle cx="12" cy="12" r="9"/></svg>连接</button>
+            <button class="tab light" data-go="onboarding"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>我的</button>
           </nav>
 
           <aside class="sheet" id="reasonSheet" aria-label="推荐理由">
@@ -797,9 +817,10 @@
         </main>
 
         <main class="view" id="profileView" data-view="profile">
-          <section class="profile-hero">
-            <video id="profileVideo" muted playsinline loop preload="metadata"></video>
+          <section class="profile-identity">
             <button class="back profile-back" data-go="discover" aria-label="返回发现页"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+            <div class="identity-mark" id="profileMonogram" aria-hidden="true"></div>
+            <span class="profile-verified">A2A 1.0 · 在线</span>
           </section>
           <div class="scroll profile-body">
             <div class="profile-name"><h1 id="profileName"></h1><span id="profileCity"></span></div>
@@ -808,7 +829,7 @@
             <section class="profile-section"><h2>可以提供</h2><p id="profileOffers"></p></section>
             <section class="profile-section"><h2>正在寻找</h2><p id="profileNeeds"></p></section>
             <section class="profile-section"><h2>工作方式</h2><p id="profileStyle"></p></section>
-            <section class="moment"><span class="moment-time">最近瞬间 · 2 天前</span><p id="profileMoment"></p></section>
+            <section class="moment"><span class="moment-time">公开项目</span><p id="profileMoment"></p></section>
           </div>
           <div class="decision-bar" style="grid-template-columns: 1fr;">
             <button class="primary" id="profileAgentButton">让 Agent 先了解</button>
@@ -954,13 +975,16 @@
                 <label>可以提供<textarea id="myOffers" placeholder="产品策略, 工程实现"></textarea></label>
                 <label>正在寻找<textarea id="myNeeds" placeholder="用户研究, 海外伙伴"></textarea></label>
                 <label>协作方式<textarea id="myStyle" maxlength="500"></textarea></label>
-                <label>介绍视频地址<input id="profileVideoUrl" type="url" maxlength="2000"></label>
                 <label class="switch-row">允许 Agent 在发现流中展示<input id="profileDiscoverable" type="checkbox"></label>
                 <button class="primary" id="profileSaveButton" type="submit">保存资料</button>
                 <button class="secondary" type="button" data-go="internet">开发调试：公网 A2A</button>
                 <p class="auth-error" id="profileError" role="alert"></p>
               </section>
             </form>
+            <section class="editor-section"><h2>本机 Agent</h2><p>绑定当前电脑正在运行的 Agent，才能通过公网发现和认识其他 Agent。</p>
+              <div class="device-bind"><select id="agentDeviceSelect" aria-label="选择本机在线 Agent"></select><button class="secondary" id="claimAgentButton" type="button">绑定</button></div>
+              <p class="device-state" id="agentDeviceState">正在检查 Relay 在线节点</p>
+            </section>
             <section class="editor-section"><h2>我的作品</h2><p>公开作品会出现在发现流，连接可见作品只对好友展示。</p><div class="work-list" id="workList"></div>
               <form class="editor-form" id="workForm" style="margin-top:14px;"><label>作品名称<input id="workTitle" required maxlength="120"></label><label>作品简介<textarea id="workSummary" maxlength="2000"></textarea></label><div class="editor-grid"><label>我的角色<input id="workRole" maxlength="100"></label><label>可见范围<select id="workVisibility"><option value="PUBLIC">公开</option><option value="CONNECTIONS">仅连接可见</option><option value="PRIVATE">私密</option></select></label></div><button class="secondary" type="submit">添加作品</button><p class="auth-error" id="workError" role="alert"></p></form>
             </section>
@@ -979,53 +1003,7 @@
   </div>
 
   <script>
-    let candidates = [
-      {
-        id: "shen-zhiye",
-        name: "沈知野", role: "独立开发者 · 杭州", city: "杭州 · GMT+8",
-        signal: "能力互补", project: "用自然语言，给小团队搭好内部工具。",
-        offers: "AI 应用开发、工作流自动化", needs: "产品叙事、早期客户",
-        video: "../视频/121311_5b97ff14ca15b2db.mp4",
-        style: "异步优先，每周可投入 12 小时；偏好先做小实验，再决定长期合作。",
-        moment: "刚把第一个可用版本交给 6 位真实用户。现在最需要的不是更多功能，而是更清楚地讲明白它解决了什么。",
-        reasons: [
-          ["供需刚好互补", "他需要产品叙事，你的优势是产品与品牌表达。"],
-          ["都在服务小团队", "目标用户高度接近，合作不需要重新理解市场。"],
-          ["工作节奏一致", "都接受异步协作，并愿意先用两周验证合作。"]
-        ],
-        questions: ["产品主导权如何分配", "是否接受两周短期试合作"]
-      },
-      {
-        id: "lin-yu",
-        name: "林予", role: "增长顾问 · 上海", city: "上海 · GMT+8",
-        signal: "方向相近", project: "帮 AI 产品拿到第一批海外付费用户。",
-        offers: "海外内容、用户访谈、增长实验", needs: "技术型联合项目、稳定交付伙伴",
-        video: "../视频/501354dd-b84b-426d-ba44-eff53355b69f.mp4",
-        style: "结果导向，习惯每周一次同步，其余时间异步推进；每月 AI 成本约 500–2000 元。",
-        moment: "最近连续访谈了 14 位海外独立开发者，发现大家真正愿意付费的不是流量，而是更短的首次成交路径。",
-        reasons: [
-          ["目标市场重合", "你们都关注 AI 产品从验证走向真实收入。"],
-          ["资源可以交换", "她有海外用户触达，你有产品与技术交付能力。"],
-          ["当前阶段匹配", "双方都在寻找能立即启动的小型联合项目。"]
-        ],
-        questions: ["合作更偏顾问还是联合产品", "目标市场优先级是否一致"]
-      },
-      {
-        id: "zhou-yi",
-        name: "周熠", role: "产品设计师 · 深圳", city: "深圳 · GMT+8",
-        signal: "值得了解", project: "让普通人也敢用复杂的 AI 工作流。",
-        offers: "产品策略、交互设计、原型验证", needs: "Agent 工程伙伴、真实业务场景",
-        video: "../视频/preview (1).mp4",
-        style: "重视书面思考与高密度反馈，倾向每周投入 8–10 小时共同打磨一个明确问题。",
-        moment: "删掉了原型里 11 个按钮，只留下一个决策动作。好的 AI 产品不应该要求用户先学会管理 AI。",
-        reasons: [
-          ["产品理念接近", "都认为 Agent 能力应该隐藏在简单交互背后。"],
-          ["能力组合完整", "他的设计验证能力可以补上你的工程与业务能力。"],
-          ["都愿意公开构建", "可以通过持续发布过程内容建立早期信任。"]
-        ],
-        questions: ["真实业务场景由谁提供", "对商业化节奏的预期"]
-      }
-    ];
+    let candidates = [];
 
     let index = 0;
     let touchStartY = 0;
@@ -1039,13 +1017,14 @@
     let currentUser = null;
     let currentProfile = null;
     let currentWorks = [];
+    let agentDeviceOptions = [];
+    let myAgentDevice = null;
     let authMode = "login";
     let appReady = false;
     let roomCreating = false;
     let screeningRunning = false;
+    let lastCardStepAt = 0;
     const $ = (id) => document.getElementById(id);
-    const video = $("candidateVideo");
-    const profileVideo = $("profileVideo");
     const statusbar = $("statusbar");
     const toast = $("toast");
     let toastTimer;
@@ -1116,33 +1095,36 @@
       return value.split(/[,，\n]/).map(item => item.trim()).filter(Boolean);
     }
 
-    function mapDiscoveryProfile(item, fallbackIndex) {
-      const publicWork = item.works?.find(work => work.videoUrl) || item.works?.[0];
+    function monogram(name) {
+      const parts = String(name || "OPC").trim().split(/\s+/).filter(Boolean);
+      if (parts.length > 1) return parts.slice(0, 2).map(part => part[0]).join("").toUpperCase();
+      return Array.from(parts[0] || "OPC").slice(0, 2).join("").toUpperCase();
+    }
+
+    function mapDiscoveryProfile(item) {
       const relationSignals = {
         PENDING_OUTGOING: "已请求认识",
         PENDING_INCOMING: "对方想认识你",
         CONNECTED: "已经连接"
       };
       return {
-        id: item.username,
-        profileId: item.profileId,
-        name: item.displayName,
+        id: item.agentId,
+        agentId: item.agentId,
+        networkAgent: true,
+        owner: item.owner,
+        name: item.name,
         role: [item.role, item.city].filter(Boolean).join(" · ") || "OPC 创作者",
         city: item.city || "线上",
-        signal: relationSignals[item.relationState] || (item.works?.length ? "有作品可看" : "公开资料"),
-        project: item.projectSummary || item.bio || "正在寻找新的协作可能。",
+        signal: relationSignals[item.relationState] || `实时在线 · ${item.model || "本地模型"}`,
+        project: item.projectSummary || "正在寻找新的协作可能。",
         offers: item.offers?.join("、") || "等待补充",
         needs: item.needs?.join("、") || "开放认识",
-        video: item.introVideoUrl || publicWork?.videoUrl || [
-          "../视频/121311_5b97ff14ca15b2db.mp4",
-          "../视频/501354dd-b84b-426d-ba44-eff53355b69f.mp4",
-          "../视频/preview (1).mp4"
-        ][fallbackIndex % 3],
+        monogram: monogram(item.name),
         style: item.collaborationStyle || "协作方式待进一步了解。",
-        moment: publicWork ? publicWork.title + " · " + (publicWork.summary || "公开作品") : "还没有公开作品。",
+        moment: `在线 Agent · ${item.provider || "local"} / ${item.model || "unknown"}`,
         reasons: [
-          ["公开资料", item.bio || "已允许在发现流中展示资料。"],
-          ["作品线索", publicWork?.title || "可以先从个人项目开始了解。"],
+          ["实时在线", `${item.name}的 Agent 当前已连接公网 Relay。`],
+          ["A2A 1.0", "初聊会在两台电脑之间产生可追溯的 A2A Task。"],
           ["协作方向", item.needs?.join("、") || "正在寻找协作机会"]
         ],
         questions: ["是否适合当前合作目标", "实际投入时间和协作边界"],
@@ -1152,11 +1134,32 @@
 
     async function loadDiscoveryFeed() {
       if (!appReady) return;
-      const feed = await apiJson("/api/discovery/feed?limit=20");
+      const feed = await apiJson("/api/discovery/online-agents");
       candidates = feed.map(mapDiscoveryProfile);
       index = 0;
       renderCandidate(false);
-      if ($("discoverView").classList.contains("active")) video.play().catch(() => {});
+    }
+
+    async function loadAgentDevices() {
+      if (!appReady) return;
+      agentDeviceOptions = await apiJson("/api/me/agent-devices");
+      myAgentDevice = agentDeviceOptions.find(device => device.isMine) || null;
+      const select = $("agentDeviceSelect");
+      select.replaceChildren(...agentDeviceOptions.map(device => {
+        const option = document.createElement("option");
+        option.value = device.agentId;
+        option.disabled = !device.online || (device.isClaimed && !device.isMine);
+        option.textContent = `${device.name} · ${device.online ? "在线" : "离线"}${device.model ? " · " + device.model : ""}${device.isMine ? " · 已绑定" : device.isClaimed ? " · 已被认领" : ""}`;
+        return option;
+      }));
+      const preferred = myAgentDevice || agentDeviceOptions.find(device => device.online && !device.isClaimed);
+      if (preferred) select.value = preferred.agentId;
+      $("claimAgentButton").disabled = !preferred || Boolean(myAgentDevice);
+      $("claimAgentButton").textContent = myAgentDevice ? "已绑定" : "绑定";
+      $("agentDeviceState").textContent = myAgentDevice
+        ? `${myAgentDevice.name} 已连接 · ${myAgentDevice.provider || "local"} / ${myAgentDevice.model || "unknown"}`
+        : "尚未绑定本机 Agent；先启动 Relay Node，再在这里认领。";
+      $("agentDeviceState").classList.toggle("online", Boolean(myAgentDevice?.online));
     }
 
     function renderMySpace() {
@@ -1172,7 +1175,6 @@
       $("myOffers").value = (profile.offers || []).join(", ");
       $("myNeeds").value = (profile.needs || []).join(", ");
       $("myStyle").value = profile.collaborationStyle || "";
-      $("profileVideoUrl").value = profile.introVideoUrl || "";
       $("profileDiscoverable").checked = Boolean(profile.discoverable);
       renderWorks();
     }
@@ -1212,6 +1214,28 @@
       currentUser = currentProfile.user;
       currentWorks = await apiJson("/api/me/works");
       renderMySpace();
+      await loadAgentDevices();
+    }
+
+    function introductionHistory(introduction, label = "查看 Agent 初聊记录") {
+      const details = document.createElement("details");
+      details.className = "intro-history";
+      const transcript = introduction?.transcript || [];
+      const summary = document.createElement("summary");
+      summary.textContent = `${label} · ${transcript.length} 个 A2A Task`;
+      const list = document.createElement("ol");
+      transcript.forEach((turn, position) => {
+        const item = document.createElement("li");
+        const response = turn.response || {};
+        const message = response.shortMessage || response.summary || response.reply || "本轮 A2A Task 已完成。";
+        item.textContent = `第 ${position + 1} 轮：${message}`;
+        const task = document.createElement("code");
+        task.textContent = `${turn.taskId || "unknown"} · ${turn.taskState || "UNKNOWN"}`;
+        item.append(task);
+        list.append(item);
+      });
+      details.append(summary, list);
+      return details;
     }
 
     function renderConnections(connections, requests) {
@@ -1227,6 +1251,9 @@
           card.innerHTML = '<div><h3></h3><p></p><small>' + (online ? "设备在线，可继续接入" : "设备暂未在线") + '</small></div>';
           card.querySelector("h3").textContent = connection.user.displayName;
           card.querySelector("p").textContent = "@" + connection.user.username;
+          if (connection.introductions?.length) {
+            card.append(introductionHistory(connection.introductions[0], "查看认识记录"));
+          }
           return card;
         }));
       }
@@ -1240,6 +1267,12 @@
           card.innerHTML = '<h3></h3><p></p><div class="request-actions"><button class="primary" type="button">接受</button><button class="secondary" type="button">拒绝</button></div>';
           card.querySelector("h3").textContent = request.user.displayName + " · @" + request.user.username;
           card.querySelector("p").textContent = request.message || "请求添加你为连接。";
+          if (request.introduction) {
+            card.insertBefore(
+              introductionHistory(request.introduction, "查看双方 Agent 的初聊"),
+              card.querySelector(".request-actions")
+            );
+          }
           card.querySelector(".primary").addEventListener("click", () => decideConnection(request.id, true));
           card.querySelector(".secondary").addEventListener("click", () => decideConnection(request.id, false));
           return card;
@@ -1264,31 +1297,42 @@
       } catch (error) { showToast(error.message); }
     }
 
-    function renderCandidate(autoplay = true) {
+    function renderCandidate(animate = true) {
       if (!candidates.length) {
-        video.removeAttribute("src");
         $("candidateSignal").textContent = "暂无公开 Agent";
-        $("candidateName").textContent = "还没有可发现的人";
-        $("candidateRole").textContent = "完善资料并打开发现开关，成为第一个被看见的人。";
-        $("candidateProject").textContent = "发现流只展示真实注册用户的公开资料和作品。";
+        $("candidateName").textContent = "暂时没有其他在线 Agent";
+        $("candidateRole").textContent = myAgentDevice ? "你的 Agent 已经在线，正在等待其他节点。" : "先在“我的”绑定本机在线 Agent。";
+        $("candidateProject").textContent = "发现流只展示已经绑定账号并连接公网 Relay 的真实 Agent。";
         $("candidateOffers").textContent = "";
         $("candidateNeeds").textContent = "";
-        $("pager").replaceChildren();
+        $("candidateMonogram").textContent = "OPC";
+        $("pager").textContent = "0 / 0";
+        $("candidateSignal").disabled = true;
+        $("saveButton").disabled = true;
+        $("profileButton").disabled = true;
+        $("agentButton").disabled = true;
         $("reasonList").replaceChildren();
         return;
       }
       const c = candidates[index];
-      video.src = c.video;
       $("candidateSignal").textContent = `${c.signal} · 为什么推荐`;
+      $("candidateSignal").disabled = false;
+      $("saveButton").disabled = false;
+      $("candidateMonogram").textContent = c.monogram;
       $("candidateName").textContent = c.name;
       $("candidateRole").textContent = c.role;
       $("candidateProject").textContent = c.project;
       $("candidateOffers").textContent = c.offers;
       $("candidateNeeds").textContent = c.needs;
       $("saveButton").classList.remove("active");
-      $("pager").innerHTML = candidates.map((_, i) => `<span class="${i === index ? "active" : ""}"></span>`).join("");
+      $("pager").textContent = `${String(index + 1).padStart(2, "0")} / ${String(candidates.length).padStart(2, "0")}`;
+      $("profileButton").disabled = false;
+      $("agentButton").disabled = false;
       $("reasonList").innerHTML = c.reasons.map((reason, i) => `<div class="reason"><span class="reason-index">0${i + 1}</span><div><b>${reason[0]}</b><p>${reason[1]}</p></div></div>`).join("");
-      if (autoplay) video.play().catch(() => {});
+      if (animate) {
+        $("personCard").classList.add("changing");
+        requestAnimationFrame(() => $("personCard").classList.remove("changing"));
+      }
     }
 
     function stepCandidate(direction) {
@@ -1300,7 +1344,7 @@
     function renderProfile() {
       if (!candidates.length) return;
       const c = candidates[index];
-      profileVideo.src = c.video;
+      $("profileMonogram").textContent = c.monogram;
       $("profileName").textContent = c.name;
       $("profileCity").textContent = c.city;
       $("profileRole").textContent = c.role;
@@ -1309,7 +1353,6 @@
       $("profileNeeds").textContent = c.needs;
       $("profileStyle").textContent = c.style;
       $("profileMoment").textContent = c.moment;
-      profileVideo.play().catch(() => {});
     }
 
     function renderList(element, items) {
@@ -1323,6 +1366,30 @@
     function renderConnect() {
       const view = $("connectView");
       view.classList.remove("running", "empty");
+      if (currentScreening?.kind === "AGENT_INTRODUCTION") {
+        const introduction = currentScreening.introduction;
+        const report = introduction.report || {};
+        const stateLabels = {
+          NONE: "可以建立联系",
+          PENDING_OUTGOING: "等待对方接受",
+          PENDING_INCOMING: "对方已请求联系",
+          CONNECTED: "已经是联系人"
+        };
+        $("connectTitle").textContent = "双方 Agent 已完成初聊";
+        $("connectSubtitle").textContent = `${introduction.sourceName} 与 ${introduction.targetName}`;
+        $("connectRound").textContent = `${introduction.transcript.length} 个 Task`;
+        $("connectRecommendation").textContent = stateLabels[introduction.relationState] || "初聊完成";
+        $("connectSummary").textContent = report.summary || "双方 Agent 已交换公开资料并完成初步了解。";
+        $("connectDisclosure").textContent = "本次沟通通过公网 Relay 在两台电脑间执行，每轮都保留 A2A Task ID；建立联系人仍需对方本人接受。";
+        renderList($("connectMatches"), [...(report.commonGround || []), ...(report.complementarity || [])].slice(0, 4));
+        renderList($("connectQuestions"), [...(report.risks || []), ...(report.unconfirmed || [])].slice(0, 3));
+        $("transcriptButton").hidden = false;
+        $("approveButton").disabled = introduction.relationState !== "NONE";
+        $("approveButton").textContent = introduction.relationState === "NONE"
+          ? "请求建立联系"
+          : stateLabels[introduction.relationState] || "已处理";
+        return;
+      }
       if (currentScreening?.kind === "DISCOVERY_ASSESSMENT") {
         const assessment = currentScreening.assessment;
         const stateLabels = {
@@ -1377,10 +1444,12 @@
       const view = $("connectView");
       view.classList.remove("empty");
       view.classList.add("running");
-      $("connectTitle").textContent = candidate.profileId ? "Agent 正在了解" : "Agent 正在沟通";
+      $("connectTitle").textContent = candidate.networkAgent ? "双方 Agent 正在初聊" : candidate.profileId ? "Agent 正在了解" : "Agent 正在沟通";
       $("connectSubtitle").textContent = `正在了解 ${candidate.name}`;
-      $("connectRound").textContent = candidate.profileId ? "公开资料" : "A2A";
-      $("agentLoadingText").textContent = candidate.profileId
+      $("connectRound").textContent = candidate.networkAgent ? "A2A 1.0" : candidate.profileId ? "公开资料" : "A2A";
+      $("agentLoadingText").textContent = candidate.networkAgent
+        ? "正在通过公网 Relay 执行 3 个真实 A2A Task"
+        : candidate.profileId
         ? "读取公开资料、作品和协作偏好"
         : "核对方向、能力与合作边界";
     }
@@ -1401,12 +1470,30 @@
 
     async function startAgentScreening() {
       if (screeningRunning || !candidates.length) return;
+      if (candidates[index].networkAgent && !myAgentDevice) {
+        showToast("请先绑定本机在线 Agent");
+        go("onboarding");
+        return;
+      }
       screeningRunning = true;
       screeningCandidate = candidates[index];
       currentScreening = null;
       go("connect");
       setScreeningLoading(screeningCandidate);
       try {
+        if (screeningCandidate.networkAgent) {
+          if (!myAgentDevice) throw new Error("请先在“我的”绑定本机在线 Agent");
+          const introduction = await apiJson("/api/agent-introductions", {
+            method: "POST",
+            body: JSON.stringify({
+              targetAgentId: screeningCandidate.agentId,
+              goal: "请双方介绍自己、了解能力与需求，并判断是否值得建立联系。"
+            })
+          });
+          currentScreening = { kind: "AGENT_INTRODUCTION", introduction };
+          renderConnect();
+          return;
+        }
         if (screeningCandidate.profileId) {
           const assessment = await apiJson(
             "/api/discovery/" + screeningCandidate.profileId + "/assessment",
@@ -1765,13 +1852,9 @@
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       toast.classList.remove("show");
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.dataset.view === viewName));
-      const dark = viewName === "discover";
-      statusbar.style.color = dark ? "#f7f8f3" : "#181916";
+      statusbar.style.color = "#181916";
       $("reasonSheet").classList.remove("open");
       $("transcriptSheet").classList.remove("open");
-      video.pause();
-      profileVideo.pause();
-      if (viewName === "discover") video.play().catch(() => {});
       if (viewName === "profile") renderProfile();
       if (viewName === "connect") screeningRunning ? setScreeningLoading(screeningCandidate) : renderConnect();
       if (viewName === "internet") {
@@ -1794,14 +1877,17 @@
     }
 
     document.querySelectorAll("[data-go]").forEach(button => button.addEventListener("click", () => go(button.dataset.go)));
-    $("videoStage").addEventListener("click", () => video.paused ? video.play() : video.pause());
-    $("videoStage").addEventListener("touchstart", e => { touchStartY = e.changedTouches[0].clientY; }, { passive: true });
-    $("videoStage").addEventListener("touchend", e => {
+    $("cardStage").addEventListener("touchstart", e => { touchStartY = e.changedTouches[0].clientY; }, { passive: true });
+    $("cardStage").addEventListener("touchend", e => {
       const delta = e.changedTouches[0].clientY - touchStartY;
       if (Math.abs(delta) > 48) stepCandidate(delta < 0 ? 1 : -1);
     }, { passive: true });
-    $("videoStage").addEventListener("wheel", e => {
-      if (Math.abs(e.deltaY) > 15) stepCandidate(e.deltaY > 0 ? 1 : -1);
+    $("cardStage").addEventListener("wheel", e => {
+      const now = Date.now();
+      if (Math.abs(e.deltaY) > 15 && now - lastCardStepAt > 350) {
+        lastCardStepAt = now;
+        stepCandidate(e.deltaY > 0 ? 1 : -1);
+      }
     }, { passive: true });
     document.addEventListener("keydown", e => {
       if (document.querySelector('[data-view="discover"].active')) {
@@ -1810,12 +1896,6 @@
       }
     });
 
-    $("soundButton").addEventListener("click", e => {
-      e.stopPropagation();
-      video.muted = !video.muted;
-      $("soundButton").classList.toggle("sound-off", video.muted);
-      $("soundButton").setAttribute("aria-label", video.muted ? "开启声音" : "关闭声音");
-    });
     $("saveButton").addEventListener("click", () => {
       $("saveButton").classList.toggle("active");
       showToast($("saveButton").classList.contains("active") ? "已收藏，可随时回来" : "已取消收藏");
@@ -1829,15 +1909,21 @@
     $("transcriptButton").addEventListener("click", async () => {
       if (!currentScreening) return;
       try {
-        const response = await fetch(`/api/screenings/${currentScreening.id}/transcript`);
-        if (!response.ok) throw new Error("原文读取失败");
-        const transcript = await response.json();
-        $("transcriptList").replaceChildren(...transcript.rounds.map(turn => {
+        let rounds;
+        if (currentScreening.kind === "AGENT_INTRODUCTION") {
+          rounds = currentScreening.introduction.transcript;
+        } else {
+          const response = await fetch(`/api/screenings/${currentScreening.id}/transcript`);
+          if (!response.ok) throw new Error("原文读取失败");
+          rounds = (await response.json()).rounds;
+        }
+        $("transcriptList").replaceChildren(...rounds.map(turn => {
           const section = document.createElement("section");
           section.className = "transcript-turn";
-          const fromName = turn.fromAgentId === "opc-builder" ? "我的 Agent" : screeningCandidate.name;
-          const toName = turn.toAgentId === "opc-builder" ? "我的 Agent" : screeningCandidate.name;
-          const message = turn.response.shortMessage || turn.response.summary || "已完成本轮核对。";
+          const sourceAgentId = myAgentDevice?.agentId;
+          const fromName = turn.fromAgentId === sourceAgentId ? "我的 Agent" : screeningCandidate.name;
+          const toName = turn.toAgentId === sourceAgentId ? "我的 Agent" : screeningCandidate.name;
+          const message = turn.response.shortMessage || turn.response.summary || turn.response.reply || "已完成本轮核对。";
           const intentLabels = {
             evaluate_collaboration: "评估合作方向",
             answer_screening: "回应筛选问题",
@@ -1858,6 +1944,22 @@
     async function decideScreening(decision) {
       if (!currentScreening) return;
       try {
+        if (currentScreening.kind === "AGENT_INTRODUCTION") {
+          if (decision === "decline") {
+            showToast("已结束本次了解，不会建立联系人");
+            setTimeout(() => go("discover"), 500);
+            return;
+          }
+          const introduction = await apiJson(
+            `/api/agent-introductions/${currentScreening.introduction.id}/request-contact`,
+            { method: "POST" }
+          );
+          currentScreening.introduction = introduction;
+          renderConnect();
+          await Promise.all([loadDiscoveryFeed(), loadConnections()]);
+          showToast("联系人请求已发送，等待对方本人接受");
+          return;
+        }
         if (currentScreening.kind === "DISCOVERY_ASSESSMENT") {
           if (decision === "decline") {
             showToast("已跳过，可以继续查看其他人");
@@ -1964,7 +2066,6 @@
             offers: splitList($("myOffers").value),
             needs: splitList($("myNeeds").value),
             collaborationStyle: $("myStyle").value.trim(),
-            introVideoUrl: $("profileVideoUrl").value.trim() || null,
             discoverable: $("profileDiscoverable").checked
           })
         });
@@ -1975,6 +2076,23 @@
         $("profileError").textContent = error.message;
       } finally {
         $("profileSaveButton").disabled = false;
+      }
+    });
+    $("claimAgentButton").addEventListener("click", async () => {
+      const agentId = $("agentDeviceSelect").value;
+      if (!agentId) return;
+      $("claimAgentButton").disabled = true;
+      try {
+        await apiJson("/api/me/agent-devices/claim", {
+          method: "POST",
+          body: JSON.stringify({ agentId, name: "本机 Agent", platform: navigator.platform || "desktop" })
+        });
+        await Promise.all([loadAgentDevices(), loadDiscoveryFeed()]);
+        showToast("本机 Agent 已绑定，可以开始公网认识");
+      } catch (error) {
+        $("profileError").textContent = error.message;
+      } finally {
+        if (!myAgentDevice) $("claimAgentButton").disabled = false;
       }
     });
     $("workForm").addEventListener("submit", async event => {
@@ -2018,6 +2136,8 @@
       currentUser = null;
       currentProfile = null;
       currentWorks = [];
+      agentDeviceOptions = [];
+      myAgentDevice = null;
       showAuth();
     });
     $("discoverView").addEventListener("click", e => {
@@ -2040,7 +2160,6 @@
     setInterval(() => {
       if ($("internetView").classList.contains("active")) loadRelayAgents();
     }, 5000);
-    setTimeout(() => video.play().catch(() => {}), 350);
   </script>
 </body>
 </html>

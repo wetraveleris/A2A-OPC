@@ -61,8 +61,6 @@ class ProfileView(APIModel):
     needs: list[str]
     collaboration_style: str
     languages: list[str]
-    avatar_url: str | None
-    intro_video_url: str | None
     discoverable: bool
     updated_at: datetime
 
@@ -77,8 +75,6 @@ class ProfileUpdateRequest(APIModel):
     needs: list[str] | None = None
     collaboration_style: str | None = Field(default=None, max_length=500)
     languages: list[str] | None = None
-    avatar_url: str | None = Field(default=None, max_length=2000)
-    intro_video_url: str | None = Field(default=None, max_length=2000)
     discoverable: bool | None = None
 
 
@@ -88,8 +84,6 @@ class WorkCreateRequest(APIModel):
     role: str = Field(default="", max_length=100)
     status: Literal["IDEA", "IN_PROGRESS", "SHIPPED", "ARCHIVED"] = "IN_PROGRESS"
     visibility: Literal["PUBLIC", "CONNECTIONS", "PRIVATE"] = "PUBLIC"
-    cover_url: str | None = Field(default=None, max_length=2000)
-    video_url: str | None = Field(default=None, max_length=2000)
     links: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
 
@@ -100,8 +94,6 @@ class WorkUpdateRequest(APIModel):
     role: str | None = Field(default=None, max_length=100)
     status: Literal["IDEA", "IN_PROGRESS", "SHIPPED", "ARCHIVED"] | None = None
     visibility: Literal["PUBLIC", "CONNECTIONS", "PRIVATE"] | None = None
-    cover_url: str | None = Field(default=None, max_length=2000)
-    video_url: str | None = Field(default=None, max_length=2000)
     links: list[str] | None = None
     skills: list[str] | None = None
     sort_order: int | None = Field(default=None, ge=0, le=10000)
@@ -114,8 +106,6 @@ class WorkView(APIModel):
     role: str
     status: str
     visibility: str
-    cover_url: str | None
-    video_url: str | None
     links: list[str]
     skills: list[str]
     sort_order: int
@@ -135,8 +125,6 @@ class DiscoveryProfileView(APIModel):
     needs: list[str]
     collaboration_style: str
     languages: list[str]
-    avatar_url: str | None
-    intro_video_url: str | None
     works: list[WorkView]
     relation_state: Literal[
         "NONE",
@@ -175,6 +163,7 @@ class FriendRequestView(APIModel):
     user: PublicUserView
     status: str
     message: str
+    introduction: dict[str, object] | None = None
     created_at: datetime
 
 
@@ -182,4 +171,5 @@ class ConnectionView(APIModel):
     id: str
     user: PublicUserView
     devices: list[dict[str, object]]
+    introductions: list[dict[str, object]]
     created_at: datetime
